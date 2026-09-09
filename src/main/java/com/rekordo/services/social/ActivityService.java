@@ -252,9 +252,8 @@ public class ActivityService {
         if (actorIds.isEmpty()) {
             return new ActivityFeedDto(List.of());
         }
-        // Your own lines are read back too, so the feed is not only about other people.
-        // An accepted request is the exception: it is addressed to the person who asked,
-        // and mayRead keeps it out of the accepter's own feed.
+        // Your own lines are read back too: "You accepted Anna Reuter's friend request"
+        // is news to you and to nobody else, and the row is stored against you.
         actorIds.add(viewerId);
 
         List<ActivityEventEntity> events =
@@ -265,7 +264,8 @@ public class ActivityService {
 
         Map<UUID, UserEntity> actors = actorsOf(readable);
         Map<String, ReleaseEntity> releases = releasesOf(readable);
-        return new ActivityFeedDto(collapse(readable, actors, releases, albumCoversOf(readable)));
+        return new ActivityFeedDto(
+                collapse(viewerId, readable, actors, releases, albumCoversOf(readable)));
     }
 
     /**
@@ -294,16 +294,16 @@ public class ActivityService {
 
         Map<UUID, UserEntity> actors = actorsOf(events);
         Map<String, ReleaseEntity> releases = releasesOf(events);
-        return collapse(events, actors, releases, albumCoversOf(events));
+        return collapse(viewerId, events, actors, releases, albumCoversOf(events));
     }
 
     private boolean mayRead(UUID viewerId, ActivityEventEntity event) {
         return switch (event.getType()) {
-            // The person who asked, and nobody else. The line is written from the actor
-            // ("<name> accepted your request"), so it only makes sense to the one who was
-            // accepted — showing it to the accepter too hands them their own name in a
-            // sentence addressed to somebody else.
-            case FRIENDSHIP_ACCEPTED -> Objects.equals(event.getSubjectId(), viewerId);
+            // The two people in it, and nobody else. They read different sentences off
+            // the same row — see byViewer in toDto — because it is news to the one who
+            // asked and a note of what they did to the one who accepted.
+            case FRIENDSHIP_ACCEPTED -> event.getActorId().equals(viewerId)
+                    || Objects.equals(event.getSubjectId(), viewerId);
             case WISH_ADDED -> visibilityService.canSeeWishlist(viewerId, event.getActorId());
             case COPY_ADDED, WISH_FULFILLED -> visibilityService.canSeeCollection(viewerId, event.getActorId())
                     && copyStillShown(event);
@@ -335,6 +335,7 @@ public class ActivityService {
      * change without a migration.
      */
     private List<ActivityEntryDto> collapse(
+            UUID viewerId,
             List<ActivityEventEntity> events,
             Map<UUID, UserEntity> actors,
             Map<String, ReleaseEntity> releases,
@@ -355,13 +356,14 @@ public class ActivityService {
                 }
             }
             List<ActivityEventEntity> group = events.subList(index, end);
-            entries.add(toDto(head, group, actors, releases, albumCovers));
+            entries.add(toDto(viewerId, head, group, actors, releases, albumCovers));
             index = end;
         }
         return entries;
     }
 
     private ActivityEntryDto toDto(
+            UUID viewerId,
             ActivityEventEntity head,
             List<ActivityEventEntity> group,
             Map<UUID, UserEntity> actors,
@@ -375,10 +377,17 @@ public class ActivityService {
                         .filter(url -> url != null)
                         .toList()
                 : List.of();
+        /*
+         * An accepted request is the one line both sides can see, and neither of them
+         * wants to be told their own name: the person drawn is always the other one, and
+         * byViewer says which way round it was so the client can pick the sentence.
+         */
+        boolean byViewer = head.getType() == ActivityType.FRIENDSHIP_ACCEPTED
+                && head.getActorId().equals(viewerId);
         return new ActivityEntryDto(
                 head.getId(),
                 head.getType(),
-                actorOf(head, actors),
+                byViewer ? personOf(head.getSubjectId(), actors) : actorOf(head, actors),
                 head.getTitle(),
                 head.getArtistName(),
                 head.getReleaseId(),
@@ -387,15 +396,24 @@ public class ActivityService {
                 coverOf(head, releases, albumCovers),
                 head.getOccurredAt(),
                 group.size(),
-                covers);
+                covers,
+                byViewer);
     }
 
     private ActivityActorDto actorOf(ActivityEventEntity event, Map<UUID, UserEntity> actors) {
-        UserEntity actor = actors.get(event.getActorId());
-        return actor == null
-                ? new ActivityActorDto(event.getActorId(), null, null, null)
+        return personOf(event.getActorId(), actors);
+    }
+
+    /**
+     * One person, thin. An id with no row behind it still answers, with nothing but the
+     * id: a feed line is not worth dropping over a name that could not be looked up.
+     */
+    private ActivityActorDto personOf(UUID id, Map<UUID, UserEntity> actors) {
+        UserEntity person = id == null ? null : actors.get(id);
+        return person == null
+                ? new ActivityActorDto(id, null, null, null)
                 : new ActivityActorDto(
-                        actor.getId(), actor.getHandle(), actor.getDisplayName(), AvatarService.urlFor(actor));
+                        person.getId(), person.getHandle(), person.getDisplayName(), AvatarService.urlFor(person));
     }
 
     /**
@@ -465,7 +483,14 @@ public class ActivityService {
 
     private Map<UUID, UserEntity> actorsOf(List<ActivityEventEntity> events) {
         Set<UUID> ids = new HashSet<>();
-        events.forEach(event -> ids.add(event.getActorId()));
+        for (ActivityEventEntity event : events) {
+            ids.add(event.getActorId());
+            // For this one type the subject is a person rather than a record, and the
+            // side of the line that reads "You accepted ..." names them.
+            if (event.getType() == ActivityType.FRIENDSHIP_ACCEPTED && event.getSubjectId() != null) {
+                ids.add(event.getSubjectId());
+            }
+        }
         Map<UUID, UserEntity> actors = new HashMap<>();
         if (ids.isEmpty()) {
             return actors;

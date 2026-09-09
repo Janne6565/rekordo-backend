@@ -11,6 +11,10 @@ import java.util.UUID;
  *                        "Anna added 7 copies to their collection".
  * @param collapsedCovers a few sleeves from the burst, for the little stack the design
  *                        draws beside a collapsed line. Empty for a single.
+ * @param byViewer        true when the viewer is the one who did it, which only an
+ *                        accepted request can be: both people in it read the same row,
+ *                        so {@code actor} is always the *other* one and this says which
+ *                        sentence to write around them. False for every other type.
  */
 public record ActivityEntryDto(
         UUID id,
@@ -24,4 +28,5 @@ public record ActivityEntryDto(
         String coverArtUrl,
         Instant occurredAt,
         int copyCount,
-        List<String> collapsedCovers) {}
+        List<String> collapsedCovers,
+        boolean byViewer) {}

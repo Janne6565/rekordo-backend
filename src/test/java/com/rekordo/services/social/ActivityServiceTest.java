@@ -225,15 +225,32 @@ class ActivityServiceTest {
     }
 
     @Test
-    void keepsAnAcceptedRequestOutOfTheAcceptersOwnFeed() {
-        // The line is written from the actor - "<name> accepted your request" - so showing
-        // it to the accepter read as the viewer's own name accepting their own request.
+    void namesTheOtherPersonOnAnAcceptedRequestTheViewerAccepted() {
+        // Neither side wants to be told their own name. The accepter's copy of the row is
+        // "You accepted <friend>", so it is the friend who is drawn and byViewer that says
+        // so; the alternative was the viewer's own name accepting their own request.
         ActivityEventEntity accepted = event(ActivityType.FRIENDSHIP_ACCEPTED, null, Instant.now());
         accepted.setActorId(VIEWER);
         accepted.setSubjectId(FRIEND);
         when(activityRepository.feedFor(any(), any())).thenReturn(List.of(accepted));
 
-        assertThat(service.feed(VIEWER, List.of(FRIEND)).entries()).isEmpty();
+        ActivityEntryDto entry = service.feed(VIEWER, List.of(FRIEND)).entries().getFirst();
+
+        assertThat(entry.byViewer()).isTrue();
+        assertThat(entry.actor().id()).isEqualTo(FRIEND);
+        assertThat(entry.actor().handle()).isEqualTo("friedrich.k");
+    }
+
+    @Test
+    void namesTheAccepterOnAnAcceptedRequestTheViewerAskedFor() {
+        ActivityEventEntity accepted = event(ActivityType.FRIENDSHIP_ACCEPTED, null, Instant.now());
+        accepted.setSubjectId(VIEWER);
+        when(activityRepository.feedFor(any(), any())).thenReturn(List.of(accepted));
+
+        ActivityEntryDto entry = service.feed(VIEWER, List.of(FRIEND)).entries().getFirst();
+
+        assertThat(entry.byViewer()).isFalse();
+        assertThat(entry.actor().id()).isEqualTo(FRIEND);
     }
 
     @Test
