@@ -252,8 +252,9 @@ public class ActivityService {
         if (actorIds.isEmpty()) {
             return new ActivityFeedDto(List.of());
         }
-        // Your own accepted-request lines belong in your feed too: "Anna Reuter accepted
-        // your request" is news to you and to nobody else.
+        // Your own lines are read back too, so the feed is not only about other people.
+        // An accepted request is the exception: it is addressed to the person who asked,
+        // and mayRead keeps it out of the accepter's own feed.
         actorIds.add(viewerId);
 
         List<ActivityEventEntity> events =
@@ -298,10 +299,11 @@ public class ActivityService {
 
     private boolean mayRead(UUID viewerId, ActivityEventEntity event) {
         return switch (event.getType()) {
-            // Somebody's own news, and only theirs. An accepted request is not activity
-            // their other friends have any business seeing.
-            case FRIENDSHIP_ACCEPTED -> event.getActorId().equals(viewerId)
-                    || Objects.equals(event.getSubjectId(), viewerId);
+            // The person who asked, and nobody else. The line is written from the actor
+            // ("<name> accepted your request"), so it only makes sense to the one who was
+            // accepted — showing it to the accepter too hands them their own name in a
+            // sentence addressed to somebody else.
+            case FRIENDSHIP_ACCEPTED -> Objects.equals(event.getSubjectId(), viewerId);
             case WISH_ADDED -> visibilityService.canSeeWishlist(viewerId, event.getActorId());
             case COPY_ADDED, WISH_FULFILLED -> visibilityService.canSeeCollection(viewerId, event.getActorId())
                     && copyStillShown(event);

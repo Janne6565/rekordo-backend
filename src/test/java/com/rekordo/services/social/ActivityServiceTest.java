@@ -212,7 +212,7 @@ class ActivityServiceTest {
     }
 
     @Test
-    void showsAnAcceptedRequestOnlyToTheTwoPeopleInIt() {
+    void showsAnAcceptedRequestOnlyToThePersonWhoAsked() {
         ActivityEventEntity accepted = event(ActivityType.FRIENDSHIP_ACCEPTED, null, Instant.now());
         accepted.setSubjectId(UUID.randomUUID());
         when(activityRepository.feedFor(any(), any())).thenReturn(List.of(accepted));
@@ -222,6 +222,18 @@ class ActivityServiceTest {
 
         accepted.setSubjectId(VIEWER);
         assertThat(service.feed(VIEWER, List.of(FRIEND)).entries()).hasSize(1);
+    }
+
+    @Test
+    void keepsAnAcceptedRequestOutOfTheAcceptersOwnFeed() {
+        // The line is written from the actor - "<name> accepted your request" - so showing
+        // it to the accepter read as the viewer's own name accepting their own request.
+        ActivityEventEntity accepted = event(ActivityType.FRIENDSHIP_ACCEPTED, null, Instant.now());
+        accepted.setActorId(VIEWER);
+        accepted.setSubjectId(FRIEND);
+        when(activityRepository.feedFor(any(), any())).thenReturn(List.of(accepted));
+
+        assertThat(service.feed(VIEWER, List.of(FRIEND)).entries()).isEmpty();
     }
 
     @Test
