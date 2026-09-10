@@ -10,6 +10,7 @@ import com.rekordo.model.action.LoginRequest;
 import com.rekordo.model.action.RegisterRequest;
 import com.rekordo.model.action.ResetPasswordRequest;
 import com.rekordo.model.action.UpdateProfileRequest;
+import com.rekordo.model.core.ChallengeDto;
 import com.rekordo.model.core.EmailConfirmationDto;
 import com.rekordo.model.core.SessionDto;
 import com.rekordo.model.core.TokenMode;
@@ -19,6 +20,8 @@ import com.rekordo.services.auth.AuthService;
 import com.rekordo.services.auth.EmailVerificationService;
 import com.rekordo.services.auth.PasswordResetService;
 import com.rekordo.services.auth.RefreshCookieFactory;
+import com.rekordo.services.challenge.ChallengeAction;
+import com.rekordo.services.challenge.TurnstileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -32,16 +35,30 @@ public class AuthController implements AuthApi {
     private final PasswordResetService passwordResetService;
     private final EmailVerificationService emailVerificationService;
     private final RefreshCookieFactory refreshCookieFactory;
+    private final TurnstileService turnstileService;
     private final CurrentUser currentUser;
+
+    /*
+     * The bot check runs before the service on all four gated endpoints, and never after.
+     * Verifying afterwards would still have created the account -- and on the two that send
+     * mail, would still have sent it.
+     */
 
     @Override
     public ResponseEntity<SessionDto> register(RegisterRequest request, String tokenMode) {
+        turnstileService.verify(request.turnstileToken(), ChallengeAction.REGISTER);
         return deliver(authService.register(request), TokenMode.fromHeader(tokenMode));
     }
 
     @Override
     public ResponseEntity<SessionDto> login(LoginRequest request, String tokenMode) {
+        turnstileService.verify(request.turnstileToken(), ChallengeAction.LOGIN);
         return deliver(authService.login(request), TokenMode.fromHeader(tokenMode));
+    }
+
+    @Override
+    public ResponseEntity<ChallengeDto> challenge() {
+        return ResponseEntity.ok(new ChallengeDto(turnstileService.siteKey()));
     }
 
     @Override
@@ -57,6 +74,7 @@ public class AuthController implements AuthApi {
 
     @Override
     public ResponseEntity<Void> forgotPassword(ForgotPasswordRequest request) {
+        turnstileService.verify(request.turnstileToken(), ChallengeAction.FORGOT_PASSWORD);
         passwordResetService.request(request.email());
         return ResponseEntity.noContent().build();
     }
@@ -85,6 +103,7 @@ public class AuthController implements AuthApi {
 
     @Override
     public ResponseEntity<Void> requestEmailConfirmation(RequestEmailConfirmationRequest request) {
+        turnstileService.verify(request.turnstileToken(), ChallengeAction.REQUEST_EMAIL_CONFIRMATION);
         emailVerificationService.requestFor(request.email());
         return ResponseEntity.noContent().build();
     }

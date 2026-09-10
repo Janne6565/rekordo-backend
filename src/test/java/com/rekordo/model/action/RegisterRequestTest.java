@@ -19,8 +19,10 @@ class RegisterRequestTest {
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     private RegisterRequest request(Boolean acceptedTerms, Boolean confirmedAge) {
+        // No Turnstile token: whether one is required is TurnstileService's decision, not a
+        // constraint on the record, so its absence must not register as a validation failure.
         return new RegisterRequest(
-                "jonas@example.test", "a-long-enough-password", "Jonas", acceptedTerms, confirmedAge);
+                "jonas@example.test", "a-long-enough-password", "Jonas", acceptedTerms, confirmedAge, null);
     }
 
     @Test

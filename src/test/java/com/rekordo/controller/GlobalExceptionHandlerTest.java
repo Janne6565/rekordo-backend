@@ -39,7 +39,7 @@ class GlobalExceptionHandlerTest {
     @RestControllerAdvice
     static class BootsOwnAdvice extends ResponseEntityExceptionHandler {}
 
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(null, null, null, null, null))
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(null, null, null, null, null, null))
             .setControllerAdvice(new BootsOwnAdvice(), new GlobalExceptionHandler())
             .build();
 

@@ -38,6 +38,8 @@ public class SecurityConfig {
             // The undo in the notice to an old address. It has to work from a mailbox that
             // can no longer sign in, which is the whole point of it.
             "/api/v1/auth/email-change/cancel",
+            // Only a public site key, and it is asked for before anybody could be signed in.
+            "/api/v1/auth/challenge",
             "/api/v1/auth/providers",
             "/api/v1/auth/oauth/**",
             // Profiles are open for the same reason the metadata proxy is: a public shelf

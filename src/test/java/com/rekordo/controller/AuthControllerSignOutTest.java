@@ -4,6 +4,7 @@ import com.rekordo.configuration.JwtProperties;
 import com.rekordo.controller.v1.implementation.AuthController;
 import com.rekordo.entity.UserEntity;
 import com.rekordo.security.CurrentUser;
+import com.rekordo.services.challenge.TurnstileService;
 import com.rekordo.services.auth.AuthService;
 import com.rekordo.services.auth.EmailVerificationService;
 import com.rekordo.services.auth.PasswordResetService;
@@ -41,6 +42,7 @@ class AuthControllerSignOutTest {
     @Mock private AuthService authService;
     @Mock private PasswordResetService passwordResetService;
     @Mock private EmailVerificationService emailVerificationService;
+    @Mock private TurnstileService turnstileService;
     @Mock private CurrentUser currentUser;
 
     private AuthController controller() {
@@ -49,6 +51,7 @@ class AuthControllerSignOutTest {
                 passwordResetService,
                 emailVerificationService,
                 new RefreshCookieFactory(PROPERTIES, true),
+                turnstileService,
                 currentUser);
     }
 

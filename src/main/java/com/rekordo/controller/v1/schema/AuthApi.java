@@ -10,6 +10,7 @@ import com.rekordo.model.action.RegisterRequest;
 import com.rekordo.model.action.ResetPasswordRequest;
 import com.rekordo.model.action.UpdateProfileRequest;
 import com.rekordo.model.core.SessionDto;
+import com.rekordo.model.core.ChallengeDto;
 import com.rekordo.model.core.EmailConfirmationDto;
 import com.rekordo.model.core.UserDto;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,7 @@ public interface AuthApi {
     @PostMapping("/register")
     @Operation(summary = "Create an account", description = "Also sets the refresh cookie.")
     @ApiResponse(responseCode = "200", description = "Account created and signed in")
+    @ApiResponse(responseCode = "403", description = "The bot check was not passed")
     @ApiResponse(responseCode = "409", description = "That e-mail is already registered")
     @ApiResponse(responseCode = "429", description = "Too many attempts")
     ResponseEntity<SessionDto> register(
@@ -49,6 +51,7 @@ public interface AuthApi {
     @Operation(summary = "Sign in", description = "Also sets the refresh cookie.")
     @ApiResponse(responseCode = "200", description = "Signed in")
     @ApiResponse(responseCode = "401", description = "Wrong e-mail or password")
+    @ApiResponse(responseCode = "403", description = "The bot check was not passed")
     @ApiResponse(responseCode = "429", description = "Too many attempts")
     ResponseEntity<SessionDto> login(
             @Valid @RequestBody LoginRequest request,
@@ -86,6 +89,7 @@ public interface AuthApi {
             description = "Always answers 204, whether or not the address has an account — "
                     + "a different answer would turn this into a way to find out who is registered.")
     @ApiResponse(responseCode = "204", description = "Handled")
+    @ApiResponse(responseCode = "403", description = "The bot check was not passed")
     @ApiResponse(responseCode = "429", description = "Too many attempts")
     ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request);
 
@@ -139,6 +143,7 @@ public interface AuthApi {
                     + "answers 204 -- an address with no account and one already confirmed answer the "
                     + "same, or this becomes a way to find out who is registered.")
     @ApiResponse(responseCode = "204", description = "Handled")
+    @ApiResponse(responseCode = "403", description = "The bot check was not passed")
     @ApiResponse(responseCode = "429", description = "Too many attempts")
     ResponseEntity<Void> requestEmailConfirmation(@Valid @RequestBody RequestEmailConfirmationRequest request);
 
@@ -173,6 +178,17 @@ public interface AuthApi {
     @ApiResponse(responseCode = "400", description = "The link is expired, used, or not valid")
     @ApiResponse(responseCode = "429", description = "Too many attempts")
     ResponseEntity<Void> cancelEmailChangeByToken(@Valid @RequestBody CancelEmailChangeRequest request);
+
+    @GetMapping("/challenge")
+    @Operation(
+            summary = "What a client needs to draw the bot check",
+            description = "Open, because it is asked before anybody has signed in, and public: the "
+                    + "site key it returns is rendered into the widget's markup anyway. Asked for "
+                    + "rather than built into the client because one frontend image serves both "
+                    + "staging and production, and a shipped phone binary cannot be reconfigured at "
+                    + "all. A null site key means the check is off and no token will be required.")
+    @ApiResponse(responseCode = "200", description = "The site key, or null when the check is off")
+    ResponseEntity<ChallengeDto> challenge();
 
     @GetMapping("/me")
     @Operation(summary = "The signed-in account")

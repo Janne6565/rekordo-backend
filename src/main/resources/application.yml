@@ -38,6 +38,27 @@ rekordo:
     # Off only for local HTTP development.
     cookie-secure: ${MC_COOKIE_SECURE:true}
     attempts-per-hour: 20
+  turnstile:
+    # Cloudflare's bot check in front of sign-up, sign-in and the two endpoints that mail an
+    # address the caller chose. Both keys blank switches it off, which is the local default:
+    # a laptop is not on the widget's domain list, so a required challenge here would be a
+    # form nobody could submit. Setting only one of the two fails the check at startup.
+    site-key: ${MC_TURNSTILE_SITE_KEY:}
+    secret-key: ${MC_TURNSTILE_SECRET_KEY:}
+    verify-url: https://challenges.cloudflare.com/turnstile/v0/siteverify
+    # The hostnames siteverify may report a challenge as having been solved on: the two
+    # public domains, one of which the phone's webview also renders under (it has no
+    # hostname of its own, so it borrows the production one).
+    #
+    # Deliberately not localhost. The site key is public and the widget's own domain list
+    # allows localhost so that it can be developed against -- which means anybody can solve
+    # a real challenge for this site on their own machine. Accepting the resulting token
+    # here would make the whole check ornamental. Somebody who does want a real challenge
+    # locally sets this to include it, knowingly.
+    hostnames: ${MC_TURNSTILE_HOSTNAMES:rekordo.jannekeipert.de,rekordo-staging.jannekeipert.de}
+    # Short on purpose: this call sits in front of every sign-in, so a slow Cloudflare has to
+    # fail rather than hold the request open.
+    timeout: PT5S
   mail:
     base-url: ${MC_MAIL_BASE_URL:http://mail-service.mailservice.svc.cluster.local:8080}
     # Blank disables sending: reset links are logged instead. That is the local default, so
