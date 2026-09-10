@@ -32,6 +32,11 @@ import java.util.Set;
  * Traefik the address this service sees is only as trustworthy as the forwarded header --
  * sending the wrong one would make Cloudflare reject good tokens, which is a worse failure
  * than not sending it at all.
+ *
+ * <p>All three checks run whether or not the result is acted on. With
+ * {@code rekordo.turnstile.enforce} off this is a dry run: the verdict is logged and the
+ * request goes through regardless, which is how the check gets switched on for an app that
+ * is already on people's phones without locking out the ones who have not updated.
  */
 @Service
 public class TurnstileService {
@@ -53,6 +58,9 @@ public class TurnstileService {
         if (!properties.enabled()) {
             log.warn("Turnstile is not configured — sign-up, sign-in and the two mail endpoints "
                     + "are protected by the per-IP rate limiter alone");
+        } else if (!properties.enforce()) {
+            log.warn("Turnstile is configured but not enforcing — verdicts are logged and nothing "
+                    + "is refused. Set rekordo.turnstile.enforce once old clients have gone.");
         }
     }
 
@@ -62,44 +70,81 @@ public class TurnstileService {
     }
 
     /**
+     * Whether a client should refuse to submit without a solved challenge.
+     *
+     * <p>It has to be told rather than inferred from the site key, or the observing state
+     * would be worse than useless: a widget that failed to load for somebody would block a
+     * submit the server was going to accept anyway.
+     */
+    public boolean enforced() {
+        return properties.enabled() && properties.enforce();
+    }
+
+    /**
      * @param token what the widget produced, or {@code null} from a client that did not
      *     render one. Ignored entirely when Turnstile is switched off, so a laptop with no
      *     keys configured is not a form nobody can submit.
      * @throws ChallengeFailedException when the token is missing, expired, already spent, or
-     *     was solved for a different endpoint or a different site.
+     *     was solved for a different endpoint or a different site -- but only while
+     *     {@code rekordo.turnstile.enforce} is on. With it off the same verdict is reached
+     *     and logged, and the request proceeds.
      */
     public void verify(String token, ChallengeAction action) {
         if (!properties.enabled()) {
             return;
         }
+        String problem = inspect(token, action);
+        if (problem == null) {
+            return;
+        }
+        // Logged either way, and only ever logged. "invalid-input-secret" is our own
+        // misconfiguration and "timeout-or-duplicate" would tell somebody probing that their
+        // replay was noticed, so none of it goes back to the caller -- but a 403 whose reason
+        // appears nowhere is a support request nobody can answer.
+        if (properties.enforce()) {
+            log.warn("Turnstile refused {}: {}", action.wireName(), problem);
+            throw new ChallengeFailedException("The verification check could not be completed.");
+        }
+        // The line to watch during a rollout. "no token" thinning out towards nothing is what
+        // says the old clients are gone and enforcing is safe.
+        log.warn("Turnstile would have refused {}: {}", action.wireName(), problem);
+    }
+
+    /**
+     * Runs all three checks and returns why the token is no good, or {@code null} if it is.
+     *
+     * <p>A string rather than a thrown exception because the observing state needs the same
+     * answer without the consequence -- and because the reason is for the log only. It never
+     * reaches the caller.
+     */
+    private String inspect(String token, ChallengeAction action) {
         if (token == null || token.isBlank()) {
-            throw new ChallengeFailedException("This request needs a completed verification check.");
+            return "no token";
         }
         if (token.length() > MAX_TOKEN_LENGTH) {
-            throw new ChallengeFailedException("The verification check could not be completed.");
+            return "token over " + MAX_TOKEN_LENGTH + " characters";
         }
 
-        SiteVerifyResponse verdict = siteVerify(token);
+        SiteVerifyResponse verdict;
+        try {
+            verdict = siteVerify(token);
+        } catch (SiteVerifyUnreachable ex) {
+            // Fail closed when enforcing. Waving the request through because siteverify timed
+            // out would hand an attacker the one condition they can most easily arrange.
+            return "siteverify unreachable";
+        }
 
         if (!verdict.success()) {
-            // The codes name the reason precisely and none of them is the caller's business:
-            // "invalid-input-secret" is our misconfiguration and "timeout-or-duplicate" tells
-            // somebody probing that their replay was noticed. Logged, not returned.
-            log.warn("Turnstile rejected a {} token: {}", action.wireName(), verdict.errorCodes());
-            throw new ChallengeFailedException("The verification check could not be completed.");
+            return "rejected: " + verdict.errorCodes();
         }
         if (!action.wireName().equals(verdict.action())) {
-            log.warn(
-                    "Turnstile token for action {} presented at {}",
-                    verdict.action(),
-                    action.wireName());
-            throw new ChallengeFailedException("The verification check could not be completed.");
+            return "solved for action " + verdict.action();
         }
         Set<String> approved = properties.hostnames();
         if (approved != null && !approved.isEmpty() && !approved.contains(verdict.hostname())) {
-            log.warn("Turnstile token solved on unapproved hostname {}", verdict.hostname());
-            throw new ChallengeFailedException("The verification check could not be completed.");
+            return "solved on unapproved hostname " + verdict.hostname();
         }
+        return null;
     }
 
     private SiteVerifyResponse siteVerify(String token) {
@@ -113,15 +158,19 @@ public class TurnstileService {
                     .retrieve()
                     .body(SiteVerifyResponse.class);
             if (verdict == null) {
-                throw new ChallengeFailedException("The verification check could not be completed.");
+                throw new SiteVerifyUnreachable();
             }
             return verdict;
         } catch (RestClientException ex) {
-            // Cloudflare being unreachable fails the request rather than waving it through.
-            // Fail-open here would mean an attacker gets a free pass by making siteverify
-            // time out, which is the one condition they can most easily arrange.
             log.error("Could not reach Turnstile siteverify", ex);
-            throw new ChallengeFailedException("The verification check could not be completed.");
+            throw new SiteVerifyUnreachable();
+        }
+    }
+
+    /** Internal only: it never escapes this class, and it is not the client-facing failure. */
+    private static final class SiteVerifyUnreachable extends RuntimeException {
+        private SiteVerifyUnreachable() {
+            super(null, null, false, false);
         }
     }
 

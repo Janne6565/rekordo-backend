@@ -40,13 +40,20 @@ class TurnstileServiceTest {
         return new TurnstileService(builder.build(), properties);
     }
 
+    /** Keys set and refusing, which is the end state. */
     private static TurnstileProperties configured() {
+        return properties("0x-site-key", "0x-secret-key", Set.of("rekordo.example.test"), true);
+    }
+
+    /** Keys set and only watching, which is how the check is switched on for shipped apps. */
+    private static TurnstileProperties observing() {
+        return properties("0x-site-key", "0x-secret-key", Set.of("rekordo.example.test"), false);
+    }
+
+    private static TurnstileProperties properties(
+            String siteKey, String secretKey, Set<String> hostnames, boolean enforce) {
         return new TurnstileProperties(
-                "0x-site-key",
-                "0x-secret-key",
-                VERIFY_URL,
-                Set.of("rekordo.example.test"),
-                Duration.ofSeconds(5));
+                siteKey, secretKey, VERIFY_URL, hostnames, enforce, Duration.ofSeconds(5));
     }
 
     private static MultiValueMap<String, String> form(String secret, String token) {
@@ -153,8 +160,7 @@ class TurnstileServiceTest {
      */
     @Test
     void wavesEverythingThroughWhenNotConfigured() {
-        TurnstileService service = service(
-                new TurnstileProperties("", "", VERIFY_URL, Set.of(), Duration.ofSeconds(5)));
+        TurnstileService service = service(properties("", "", Set.of(), true));
 
         assertThatCode(() -> service.verify(null, ChallengeAction.LOGIN)).doesNotThrowAnyException();
         assertThat(service.siteKey()).isNull();
@@ -164,8 +170,7 @@ class TurnstileServiceTest {
     /** Half-configured is a deployment mistake, not a mode, and it fails on the way in. */
     @Test
     void refusesToStartWithOnlyOneOfTheTwoKeys() {
-        assertThatThrownBy(() -> service(
-                        new TurnstileProperties("0x-site-key", "", VERIFY_URL, Set.of(), Duration.ofSeconds(5))))
+        assertThatThrownBy(() -> service(properties("0x-site-key", "", Set.of(), true)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("secret-key");
     }
@@ -175,11 +180,65 @@ class TurnstileServiceTest {
         assertThat(service(configured()).siteKey()).isEqualTo("0x-site-key");
     }
 
+    /*
+     * The middle state, and the only reason a check can be switched on for an app that is
+     * already installed. Every one of these would be a refusal when enforcing; here the
+     * verdict is reached, logged and ignored.
+     */
+
+    @Test
+    void observingLetsATokenlessRequestThrough() {
+        TurnstileService service = service(observing());
+
+        assertThatCode(() -> service.verify(null, ChallengeAction.LOGIN)).doesNotThrowAnyException();
+        // Nothing to verify, so Cloudflare is not called at all.
+        server.verify();
+    }
+
+    @Test
+    void observingLetsARejectedTokenThrough() {
+        TurnstileService service = service(observing());
+        respond("{\"success\":false,\"error-codes\":[\"timeout-or-duplicate\"]}");
+
+        assertThatCode(() -> service.verify("a-spent-token", ChallengeAction.LOGIN))
+                .doesNotThrowAnyException();
+        // Still asked, which is the point: the verdict is what the rollout is watching.
+        server.verify();
+    }
+
+    @Test
+    void observingLetsAWrongActionThrough() {
+        TurnstileService service = service(observing());
+        respond("{\"success\":true,\"action\":\"login\",\"hostname\":\"rekordo.example.test\"}");
+
+        assertThatCode(() -> service.verify("a-token", ChallengeAction.FORGOT_PASSWORD))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void observingLetsARequestThroughWhenSiteverifyIsUnreachable() {
+        TurnstileService service = service(observing());
+        server.expect(requestTo(VERIFY_URL)).andRespond(withServerError());
+
+        assertThatCode(() -> service.verify("a-token", ChallengeAction.LOGIN)).doesNotThrowAnyException();
+    }
+
+    /**
+     * What the clients read to decide whether to gate their submit button. Observing has to
+     * report false, or a widget that failed to load would block a submit this server was
+     * going to accept anyway -- the outage the state exists to avoid.
+     */
+    @Test
+    void reportsWhetherItWillActuallyRefuse() {
+        assertThat(service(configured()).enforced()).isTrue();
+        assertThat(service(observing()).enforced()).isFalse();
+        assertThat(service(properties("", "", Set.of(), true)).enforced()).isFalse();
+    }
+
     /** No hostname list configured skips the check rather than refusing everything. */
     @Test
     void acceptsAnyHostWhenNoneAreConfigured() {
-        TurnstileService service = service(
-                new TurnstileProperties("0x-site-key", "0x-secret-key", VERIFY_URL, Set.of(), Duration.ofSeconds(5)));
+        TurnstileService service = service(properties("0x-site-key", "0x-secret-key", Set.of(), true));
         respond("{\"success\":true,\"action\":\"login\",\"hostname\":\"anything.example.test\"}");
 
         assertThatCode(() -> service.verify("a-token", ChallengeAction.LOGIN)).doesNotThrowAnyException();

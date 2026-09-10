@@ -58,7 +58,7 @@ public class AuthController implements AuthApi {
 
     @Override
     public ResponseEntity<ChallengeDto> challenge() {
-        return ResponseEntity.ok(new ChallengeDto(turnstileService.siteKey()));
+        return ResponseEntity.ok(new ChallengeDto(turnstileService.siteKey(), turnstileService.enforced()));
     }
 
     @Override

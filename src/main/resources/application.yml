@@ -56,6 +56,17 @@ rekordo:
     # here would make the whole check ornamental. Somebody who does want a real challenge
     # locally sets this to include it, knowingly.
     hostnames: ${MC_TURNSTILE_HOSTNAMES:rekordo.jannekeipert.de,rekordo-staging.jannekeipert.de}
+    # Whether a missing or bad token actually turns the request away.
+    #
+    # Off is the rollout state, and the reason there are three states rather than two: the
+    # site key is still served, so clients draw the widget and send what it produces and
+    # every verdict is logged -- but nothing is refused. An app already installed on
+    # somebody's phone predates the widget and sends no token, and enforcing before those
+    # builds are gone would lock their owners out of their own accounts.
+    #
+    # Watch `Turnstile would have refused` in the log; once "no token" has died away, set
+    # this. Off by default because that is the end of the sequence to arrive at by accident.
+    enforce: ${MC_TURNSTILE_ENFORCE:false}
     # Short on purpose: this call sits in front of every sign-in, so a slow Cloudflare has to
     # fail rather than hold the request open.
     timeout: PT5S

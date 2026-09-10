@@ -21,6 +21,9 @@ import java.util.Set;
  * deliberate rather than lax: a laptop is not on the widget's domain list, so a required
  * challenge locally would be a form nobody could submit. It fails loudly instead of
  * quietly if only one of the two is set -- half-configured is a mistake, not a mode.
+ *
+ * <p>There are three states, not two, and the middle one is what makes a rollout possible.
+ * See {@link #enforce()}.
  */
 @Validated
 @ConfigurationProperties(prefix = "rekordo.turnstile")
@@ -40,6 +43,21 @@ public record TurnstileProperties(
          * accepted here. Empty skips the check.
          */
         Set<String> hostnames,
+        /**
+         * Whether a missing or bad token actually refuses the request.
+         *
+         * <p>Off means observe: the site key is still served, so clients draw the widget and
+         * send what it produces, and every verdict is logged -- but nothing is turned away.
+         * That is the only way to switch this on for an app that is already installed on
+         * people's phones. A build that predates the widget sends no token at all, and
+         * enforcing before those builds are gone would lock their owners out of their own
+         * accounts with no way to tell them why.
+         *
+         * <p>So the sequence is: keys on with this off, watch the log until tokenless
+         * sign-ins have died away, then turn it on. Defaults to off, because the safe end of
+         * that sequence is the one to arrive at by accident.
+         */
+        boolean enforce,
         @NotNull Duration timeout) {
 
     /**
