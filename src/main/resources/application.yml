@@ -177,12 +177,27 @@ management:
         step: 30s
   metrics:
     distribution:
-      # Without this a timer ships only count and sum, and every latency question can be
-      # answered with a mean and nothing else -- which is exactly the statistic that hides
-      # the slow tail everybody actually cares about.
+      # A timer ships only count and sum on its own, and every latency question then has
+      # to be answered with a mean -- exactly the statistic that hides the slow tail
+      # everybody actually cares about. So: percentiles, but computed here rather than
+      # as a bucket histogram.
+      #
+      # The histogram form ships one series per bucket per URI per status. Across this
+      # cluster's Spring services that shape was the single largest consumer of
+      # cardinality (5,106 series in dust-of-apollon alone), and telemetry now goes to
+      # Grafana Cloud, whose free tier allows 10,000 active series for everything.
+      # Three percentiles cost three series per URI instead of sixty-nine.
+      #
+      # What is given up: these are computed inside this JVM, so they cannot be
+      # re-aggregated across replicas and a quantile not listed here cannot be
+      # recovered after the fact. Add one to the list rather than re-enabling the
+      # histogram.
       percentiles-histogram:
-        http.server.requests: true
-        http.client.requests: true
+        http.server.requests: false
+        http.client.requests: false
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+        http.client.requests: 0.5, 0.95, 0.99
       # No expected-value bounds here. These keys match by prefix, so a bound meant for the
       # http.server.requests timer also lands on http.server.requests.active -- a long task
       # timer whose own minimum is two minutes -- and Micrometer rejects the pair at the
