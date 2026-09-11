@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.rekordo.configuration.TurnstileProperties;
 import com.rekordo.model.exception.ChallengeFailedException;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -51,10 +54,13 @@ public class TurnstileService {
 
     private final RestClient client;
     private final TurnstileProperties properties;
+    private final MeterRegistry meterRegistry;
 
-    public TurnstileService(RestClient turnstileRestClient, TurnstileProperties properties) {
+    public TurnstileService(
+            RestClient turnstileRestClient, TurnstileProperties properties, MeterRegistry meterRegistry) {
         this.client = turnstileRestClient;
         this.properties = properties;
+        this.meterRegistry = meterRegistry;
         if (!properties.enabled()) {
             log.warn("Turnstile is not configured — sign-up, sign-in and the two mail endpoints "
                     + "are protected by the per-IP rate limiter alone");
@@ -81,6 +87,67 @@ public class TurnstileService {
     }
 
     /**
+     * Why a verification came out the way it did, as a bounded set.
+     *
+     * <p>Bounded because it is a metric tag: the log line carries the specifics -- which error
+     * codes, which hostname -- and those are exactly the unbounded values that turn a counter
+     * into thousands of dead series.
+     */
+    enum Outcome {
+        ACCEPTED,
+        NO_TOKEN,
+        OVERSIZED,
+        UNREACHABLE,
+        REJECTED,
+        WRONG_ACTION,
+        WRONG_HOSTNAME;
+
+        String tag() {
+            return name().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    /** The bounded outcome for the counter, and the unbounded detail for the log. */
+    private record Verdict(Outcome outcome, String detail) {
+        static Verdict accepted() {
+            return new Verdict(Outcome.ACCEPTED, null);
+        }
+    }
+
+    /**
+     * Every counter, at zero, before anything has been verified.
+     *
+     * <p>A counter created on first use does not exist while everything is fine, and a series
+     * that does not exist cannot be charted or alerted on -- the panel reads "no data", which
+     * looks exactly like a panel that is broken. The flat zero is the thing worth seeing.
+     *
+     * <p>Only when the check is configured. With it off nothing is verified at all, and a wall
+     * of zeroes would read as "everything is being accepted" rather than "nothing is running".
+     */
+    @PostConstruct
+    void registerCounters() {
+        if (!properties.enabled()) {
+            return;
+        }
+        for (ChallengeAction action : ChallengeAction.values()) {
+            for (Outcome outcome : Outcome.values()) {
+                counter(action, outcome);
+            }
+        }
+    }
+
+    private Counter counter(ChallengeAction action, Outcome outcome) {
+        return Counter.builder("rekordo.turnstile.verifications")
+                .description("Bot-check verifications, by what the endpoint was and how it came out")
+                .tag("action", action.wireName())
+                .tag("outcome", outcome.tag())
+                // Constant for a deployment, and the difference between "would have been
+                // refused" and "was refused" -- which is the whole question during a rollout.
+                .tag("enforced", String.valueOf(properties.enforce()))
+                .register(meterRegistry);
+    }
+
+    /**
      * @param token what the widget produced, or {@code null} from a client that did not
      *     render one. Ignored entirely when Turnstile is switched off, so a laptop with no
      *     keys configured is not a form nobody can submit.
@@ -93,10 +160,12 @@ public class TurnstileService {
         if (!properties.enabled()) {
             return;
         }
-        String problem = inspect(token, action);
-        if (problem == null) {
+        Verdict verdict = inspect(token, action);
+        counter(action, verdict.outcome()).increment();
+        if (verdict.outcome() == Outcome.ACCEPTED) {
             return;
         }
+        String problem = verdict.detail();
         // Logged either way, and only ever logged. "invalid-input-secret" is our own
         // misconfiguration and "timeout-or-duplicate" would tell somebody probing that their
         // replay was noticed, so none of it goes back to the caller -- but a 403 whose reason
@@ -111,18 +180,18 @@ public class TurnstileService {
     }
 
     /**
-     * Runs all three checks and returns why the token is no good, or {@code null} if it is.
+     * Runs all three checks and says how it came out.
      *
-     * <p>A string rather than a thrown exception because the observing state needs the same
-     * answer without the consequence -- and because the reason is for the log only. It never
-     * reaches the caller.
+     * <p>Returned rather than thrown because the observing state needs the same answer without
+     * the consequence. The detail is for the log and the counter tag is for the chart; the
+     * caller sees neither.
      */
-    private String inspect(String token, ChallengeAction action) {
+    private Verdict inspect(String token, ChallengeAction action) {
         if (token == null || token.isBlank()) {
-            return "no token";
+            return new Verdict(Outcome.NO_TOKEN, "no token");
         }
         if (token.length() > MAX_TOKEN_LENGTH) {
-            return "token over " + MAX_TOKEN_LENGTH + " characters";
+            return new Verdict(Outcome.OVERSIZED, "token over " + MAX_TOKEN_LENGTH + " characters");
         }
 
         SiteVerifyResponse verdict;
@@ -131,20 +200,20 @@ public class TurnstileService {
         } catch (SiteVerifyUnreachable ex) {
             // Fail closed when enforcing. Waving the request through because siteverify timed
             // out would hand an attacker the one condition they can most easily arrange.
-            return "siteverify unreachable";
+            return new Verdict(Outcome.UNREACHABLE, "siteverify unreachable");
         }
 
         if (!verdict.success()) {
-            return "rejected: " + verdict.errorCodes();
+            return new Verdict(Outcome.REJECTED, "rejected: " + verdict.errorCodes());
         }
         if (!action.wireName().equals(verdict.action())) {
-            return "solved for action " + verdict.action();
+            return new Verdict(Outcome.WRONG_ACTION, "solved for action " + verdict.action());
         }
         Set<String> approved = properties.hostnames();
         if (approved != null && !approved.isEmpty() && !approved.contains(verdict.hostname())) {
-            return "solved on unapproved hostname " + verdict.hostname();
+            return new Verdict(Outcome.WRONG_HOSTNAME, "solved on unapproved hostname " + verdict.hostname());
         }
-        return null;
+        return Verdict.accepted();
     }
 
     private SiteVerifyResponse siteVerify(String token) {

@@ -2,6 +2,8 @@ package com.rekordo.services.challenge;
 
 import com.rekordo.configuration.TurnstileProperties;
 import com.rekordo.model.exception.ChallengeFailedException;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -33,11 +35,24 @@ class TurnstileServiceTest {
     private static final String VERIFY_URL = "https://challenges.example.test/siteverify";
 
     private MockRestServiceServer server;
+    private final MeterRegistry meters = new SimpleMeterRegistry();
 
     private TurnstileService service(TurnstileProperties properties) {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        return new TurnstileService(builder.build(), properties);
+        TurnstileService service = new TurnstileService(builder.build(), properties, meters);
+        service.registerCounters();
+        return service;
+    }
+
+    /** What the chart would show for this action and outcome. */
+    private double counted(String action, String outcome, boolean enforced) {
+        return meters.find("rekordo.turnstile.verifications")
+                .tag("action", action)
+                .tag("outcome", outcome)
+                .tag("enforced", String.valueOf(enforced))
+                .counter()
+                .count();
     }
 
     /** Keys set and refusing, which is the end state. */
@@ -242,5 +257,68 @@ class TurnstileServiceTest {
         respond("{\"success\":true,\"action\":\"login\",\"hostname\":\"anything.example.test\"}");
 
         assertThatCode(() -> service.verify("a-token", ChallengeAction.LOGIN)).doesNotThrowAnyException();
+    }
+
+    /*
+     * The counter is what the enforce decision actually rests on. Grepping a log tells you
+     * whether tokenless requests exist; it does not tell you what share of traffic they are,
+     * which is the only number that says whether flipping the switch is safe.
+     */
+
+    @Test
+    void countsAnAcceptedVerification() {
+        TurnstileService service = service(configured());
+        respond("{\"success\":true,\"action\":\"login\",\"hostname\":\"rekordo.example.test\"}");
+
+        service.verify("a-token", ChallengeAction.LOGIN);
+
+        assertThat(counted("login", "accepted", true)).isEqualTo(1);
+        assertThat(counted("login", "no_token", true)).isZero();
+    }
+
+    @Test
+    void countsTheReasonAVerificationFailed() {
+        TurnstileService service = service(observing());
+
+        service.verify(null, ChallengeAction.REGISTER);
+
+        // Tagged with the reason, not merely "failed": an old client sending nothing and a
+        // client sending something Cloudflare turns down are different problems, and only one
+        // of them resolves itself by waiting.
+        assertThat(counted("register", "no_token", false)).isEqualTo(1);
+        assertThat(counted("register", "accepted", false)).isZero();
+    }
+
+    @Test
+    void countsWhileOnlyObservingToo() {
+        TurnstileService service = service(observing());
+        respond("{\"success\":false,\"error-codes\":[\"invalid-input-response\"]}");
+
+        // Not refused, still counted -- the whole point of the state.
+        assertThatCode(() -> service.verify("a-token", ChallengeAction.LOGIN)).doesNotThrowAnyException();
+
+        assertThat(counted("login", "rejected", false)).isEqualTo(1);
+    }
+
+    /**
+     * A counter created on first use does not exist while everything is fine, and a series
+     * that does not exist charts as "no data" -- indistinguishable from a broken panel.
+     */
+    @Test
+    void registersEveryCounterAtZeroUpFront() {
+        service(configured());
+
+        assertThat(counted("forgot-password", "wrong_hostname", true)).isZero();
+        assertThat(counted("request-email-confirmation", "unreachable", true)).isZero();
+        assertThat(meters.find("rekordo.turnstile.verifications").counters())
+                .hasSize(ChallengeAction.values().length * 7);
+    }
+
+    /** With the check off nothing is verified, and a wall of zeroes would misreport that. */
+    @Test
+    void registersNoCountersWhenNotConfigured() {
+        service(properties("", "", Set.of(), false));
+
+        assertThat(meters.find("rekordo.turnstile.verifications").counters()).isEmpty();
     }
 }
