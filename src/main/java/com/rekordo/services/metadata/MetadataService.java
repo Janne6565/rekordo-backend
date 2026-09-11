@@ -916,9 +916,26 @@ public class MetadataService {
     private CoverProbe fetchCoverThumbnail(ReleaseEntity entity) {
         ExternalRef ref = ExternalRef.parse(entity.getExternalId());
         if (ref.source() == ReleaseSource.MUSICBRAINZ) {
-            return coverArtClient.fetchThumbnail(ref.id());
+            return standsForItsAlbum(entity)
+                    ? coverArtClient.fetchGroupThumbnail(ref.id())
+                    : coverArtClient.fetchThumbnail(ref.id());
         }
         return discogsClient.fetchImage(entity.getCoverArtUrl());
+    }
+
+    /**
+     * Whether this row is an album rather than one of its pressings.
+     *
+     * <p>A copy with no pressing chosen is mirrored under its album's own id (see
+     * {@link #asUnpressedRelease}), so the row and its release group share an external id.
+     * Its mbid is then a release group's, and only the archive's release-group address knows it.
+     */
+    private boolean standsForItsAlbum(ReleaseEntity entity) {
+        return entity.getReleaseGroupId() != null
+                && releaseGroupRepository
+                        .findById(entity.getReleaseGroupId())
+                        .map(group -> entity.getExternalId().equals(group.getExternalId()))
+                        .orElse(false);
     }
 
     private ReleaseDto toDto(ReleaseEntity entity) {

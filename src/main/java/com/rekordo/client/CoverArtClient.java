@@ -51,18 +51,34 @@ public class CoverArtClient {
      * {@link CoverProbe}.
      */
     public CoverProbe fetchThumbnail(String releaseId) {
+        return probe("release", releaseId);
+    }
+
+    /**
+     * The album's 250px thumbnail, for a row that stands for an album rather than a pressing.
+     *
+     * <p>A copy whose owner never chose a pressing is mirrored under its release group's
+     * mbid. Asking {@code /release/} for that mbid is asking for a pressing that does not
+     * exist, and the archive's 404 is a definite no -- so the album was written down as
+     * having no cover, and every shelf a friend opened drew it blank.
+     */
+    public CoverProbe fetchGroupThumbnail(String releaseGroupMbid) {
+        return probe("release-group", releaseGroupMbid);
+    }
+
+    private CoverProbe probe(String kind, String mbid) {
         try {
             byte[] bytes = restClient
                     .get()
-                    .uri("/release/{mbid}/front-250", releaseId)
+                    .uri("/{kind}/{mbid}/front-250", kind, mbid)
                     .retrieve()
                     .body(byte[].class);
             return bytes == null ? CoverProbe.absent() : CoverProbe.found(bytes);
         } catch (HttpClientErrorException.NotFound | HttpClientErrorException.Gone e) {
-            log.debug("No cover art for release {}", releaseId);
+            log.debug("No cover art for {} {}", kind, mbid);
             return CoverProbe.absent();
         } catch (RestClientException e) {
-            log.debug("Cover art archive did not answer for release {} ({})", releaseId, e.getMessage());
+            log.debug("Cover art archive did not answer for {} {} ({})", kind, mbid, e.getMessage());
             return CoverProbe.unreachable();
         }
     }

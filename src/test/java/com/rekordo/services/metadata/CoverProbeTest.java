@@ -108,6 +108,58 @@ class CoverProbeTest {
         verify(releaseRepository).save(entity);
     }
 
+    /**
+     * A copy with no pressing chosen is mirrored under its album's id. Probing that mbid as a
+     * pressing got a 404, which was remembered as "no cover", and a friend's shelf drew the
+     * album blank while the owner's phone still showed it. Reported from the field.
+     */
+    @Test
+    void probesAnAlbumRowAtTheAlbumsAddress() {
+        String groupMbid = "02a544b3-0459-42c7-bd9c-047162e7b67a";
+        String albumRef = "musicbrainz:" + groupMbid;
+        String groupCover = "https://coverartarchive.org/release-group/" + groupMbid + "/front-500";
+
+        ReleaseGroupEntity album = new ReleaseGroupEntity();
+        album.setId(UUID.randomUUID());
+        album.setExternalId(albumRef);
+        album.setTitle("HIT ME HARD AND SOFT");
+        album.setArtistName("Billie Eilish");
+        album.setFetchedAt(Instant.now());
+
+        ReleaseEntity entity = new ReleaseEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setExternalId(albumRef);
+        entity.setReleaseGroupId(album.getId());
+        entity.setTitle("HIT ME HARD AND SOFT");
+        entity.setArtistName("Billie Eilish");
+        entity.setFormat(Format.OTHER);
+        entity.setCoverArtUrl(groupCover);
+        entity.setHasCoverArt(null);
+        entity.setFetchedAt(Instant.now());
+
+        when(releaseRepository.findByExternalId(albumRef)).thenReturn(Optional.of(entity));
+        when(releaseGroupRepository.findById(album.getId())).thenReturn(Optional.of(album));
+        when(coverArtClient.fetchThumbnail(groupMbid)).thenReturn(CoverProbe.absent());
+        when(coverArtClient.fetchGroupThumbnail(groupMbid)).thenReturn(CoverProbe.found(new byte[] {1}));
+
+        ReleaseDto release = service.getRelease(albumRef);
+
+        assertThat(release.coverArtUrl()).isEqualTo(groupCover);
+        assertThat(entity.getHasCoverArt()).isTrue();
+        verify(coverArtClient, never()).fetchThumbnail(any());
+    }
+
+    @Test
+    void probesAPressingAtThePressingsAddress() {
+        mirrored();
+        when(coverArtClient.fetchThumbnail(MBID)).thenReturn(CoverProbe.found(new byte[] {1}));
+
+        service.getRelease(MB_RELEASE);
+
+        verify(coverArtClient).fetchThumbnail(MBID);
+        verify(coverArtClient, never()).fetchGroupThumbnail(any());
+    }
+
     @Test
     void samplesThePaletteWhenTheCoverCameBack() {
         ReleaseEntity entity = mirrored();
