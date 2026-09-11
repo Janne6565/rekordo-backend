@@ -4,6 +4,7 @@ import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.CoverProbe;
 import com.rekordo.client.DiscogsClient;
 import com.rekordo.client.MusicBrainzClient;
+import com.rekordo.client.MusicBrainzResponses;
 import com.rekordo.entity.ReleaseEntity;
 import com.rekordo.entity.ReleaseGroupEntity;
 import com.rekordo.model.core.Format;
@@ -46,6 +47,9 @@ class CoverProbeTest {
     private static final String MBID = "0f2d5a1e-4a1e-4e7a-9c1e-2f0d4b6a8c11";
     private static final String MB_RELEASE = "musicbrainz:" + MBID;
     private static final String COVER_URL = "https://coverartarchive.org/release/" + MBID + "/front-500";
+    private static final String GROUP_MBID = "1c4a2f6e-2b3d-4c5e-8a9b-0d1e2f3a4b5c";
+    private static final String GROUP_COVER_URL =
+            "https://coverartarchive.org/release-group/" + GROUP_MBID + "/front-500";
 
     @Mock private MusicBrainzClient musicBrainzClient;
     @Mock private DiscogsClient discogsClient;
@@ -61,7 +65,7 @@ class CoverProbeTest {
     private ReleaseEntity mirrored() {
         ReleaseGroupEntity album = new ReleaseGroupEntity();
         album.setId(UUID.randomUUID());
-        album.setExternalId("musicbrainz:1c4a2f6e-2b3d-4c5e-8a9b-0d1e2f3a4b5c");
+        album.setExternalId("musicbrainz:" + GROUP_MBID);
         album.setTitle("Bitches Brew");
         album.setArtistName("Miles Davis");
         album.setFetchedAt(Instant.now());
@@ -100,12 +104,80 @@ class CoverProbeTest {
     void remembersADefiniteNo() {
         ReleaseEntity entity = mirrored();
         when(coverArtClient.fetchThumbnail(MBID)).thenReturn(CoverProbe.absent());
+        when(coverArtClient.fetchGroupThumbnail(GROUP_MBID)).thenReturn(CoverProbe.absent());
 
         ReleaseDto release = service.getRelease(MB_RELEASE);
 
         assertThat(release.coverArtUrl()).isNull();
         assertThat(entity.getHasCoverArt()).isFalse();
         verify(releaseRepository).save(entity);
+    }
+
+    /**
+     * A pressing the archive has no picture of is shown with its album's, rather than blank.
+     * Reported from the field: three Kate Bush pressings blank on a friend's shelf.
+     */
+    @Test
+    void fallsBackToTheAlbumsCoverWhenThePressingHasNone() {
+        ReleaseEntity entity = mirrored();
+        byte[] bytes = {1, 2, 3};
+        when(coverArtClient.fetchThumbnail(MBID)).thenReturn(CoverProbe.absent());
+        when(coverArtClient.fetchGroupThumbnail(GROUP_MBID)).thenReturn(CoverProbe.found(bytes));
+        when(coverArtClient.frontCoverUrlForGroup(GROUP_MBID)).thenReturn(GROUP_COVER_URL);
+        when(colorExtractor.extract(bytes))
+                .thenReturn(Optional.of(new CoverPalette("#101010", "#a2573a", 0.2)));
+
+        ReleaseDto release = service.getRelease(MB_RELEASE);
+
+        assertThat(release.coverArtUrl()).isEqualTo(GROUP_COVER_URL);
+        assertThat(entity.getHasCoverArt()).isTrue();
+        assertThat(entity.getDominantColor()).isEqualTo("#101010");
+    }
+
+    /**
+     * MusicBrainz's own "no front cover" is about the pressing, not the album, so a freshly
+     * looked-up pressing is offered its album's address rather than written down as coverless.
+     */
+    @Test
+    void offersTheAlbumsAddressWhenMusicBrainzSaysThePressingHasNoFront() {
+        ReleaseGroupEntity album = new ReleaseGroupEntity();
+        album.setId(UUID.randomUUID());
+        album.setExternalId("musicbrainz:" + GROUP_MBID);
+        album.setTitle("Hounds of Love");
+        album.setArtistName("Kate Bush");
+        album.setFetchedAt(Instant.now());
+
+        when(releaseRepository.findByExternalId(MB_RELEASE)).thenReturn(Optional.empty());
+        when(musicBrainzClient.lookupRelease(MBID)).thenReturn(Optional.of(new MusicBrainzResponses.Release(
+                MBID, "Hounds of Love", "1985", "GB", null, null,
+                new MusicBrainzResponses.ReleaseGroup(GROUP_MBID, "Hounds of Love", "1985", "Album", null),
+                null, null, null,
+                new MusicBrainzResponses.CoverArtArchive(false, false, 0))));
+        when(releaseGroupRepository.findByExternalId(album.getExternalId())).thenReturn(Optional.of(album));
+        when(releaseGroupRepository.findById(album.getId())).thenReturn(Optional.of(album));
+        when(releaseRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        when(coverArtClient.frontCoverUrlForGroup(GROUP_MBID)).thenReturn(GROUP_COVER_URL);
+        // The archive is down, so only what the lookup said is known.
+        when(coverArtClient.fetchThumbnail(MBID)).thenReturn(CoverProbe.unreachable());
+
+        ReleaseDto release = service.getRelease(MB_RELEASE);
+
+        assertThat(release.coverArtUrl()).isEqualTo(GROUP_COVER_URL);
+        verify(coverArtClient, never()).frontCoverUrl(any());
+    }
+
+    @Test
+    void leavesTheQuestionOpenWhenTheAlbumCouldNotBeAsked() {
+        ReleaseEntity entity = mirrored();
+        when(coverArtClient.fetchThumbnail(MBID)).thenReturn(CoverProbe.absent());
+        when(coverArtClient.fetchGroupThumbnail(GROUP_MBID)).thenReturn(CoverProbe.unreachable());
+
+        ReleaseDto release = service.getRelease(MB_RELEASE);
+
+        // The pressing's own 404 is no longer the whole answer, so nothing is written down.
+        assertThat(release.coverArtUrl()).isEqualTo(COVER_URL);
+        assertThat(entity.getHasCoverArt()).isNull();
+        verify(releaseRepository, never()).save(any());
     }
 
     /**

@@ -838,11 +838,18 @@ public class MetadataService {
         entity.setReleaseDate(release.date());
         entity.setTrackCount(MetadataMapper.trackCount(release));
         entity.setDiscCount(MetadataMapper.discCount(release));
-        entity.setCoverArtUrl(coverArtClient.frontCoverUrl(release.id()));
         // A lookup tells us whether there is a front cover; a search does not mention it at
         // all. Null is therefore "not asked yet", not "no cover" — see toDto.
-        entity.setHasCoverArt(
-                release.coverArtArchive() == null ? null : release.coverArtArchive().front());
+        Boolean front = release.coverArtArchive() == null ? null : release.coverArtArchive().front();
+        if (Boolean.FALSE.equals(front)) {
+            // This pressing has no picture of its own, but its album may. Offer the album's
+            // address and leave the question open: the probe confirms it or settles on none.
+            entity.setCoverArtUrl(coverArtClient.frontCoverUrlForGroup(release.releaseGroup().id()));
+            entity.setHasCoverArt(null);
+        } else {
+            entity.setCoverArtUrl(coverArtClient.frontCoverUrl(release.id()));
+            entity.setHasCoverArt(front);
+        }
         entity.setFetchedAt(Instant.now());
         ReleaseEntity saved = releaseRepository.save(entity);
 
@@ -915,27 +922,52 @@ public class MetadataService {
      */
     private CoverProbe fetchCoverThumbnail(ReleaseEntity entity) {
         ExternalRef ref = ExternalRef.parse(entity.getExternalId());
-        if (ref.source() == ReleaseSource.MUSICBRAINZ) {
-            return standsForItsAlbum(entity)
-                    ? coverArtClient.fetchGroupThumbnail(ref.id())
-                    : coverArtClient.fetchThumbnail(ref.id());
+        if (ref.source() != ReleaseSource.MUSICBRAINZ) {
+            return discogsClient.fetchImage(entity.getCoverArtUrl());
         }
-        return discogsClient.fetchImage(entity.getCoverArtUrl());
+        Optional<ExternalRef> album = albumOf(entity);
+        // A copy with no pressing chosen is mirrored under its album's own id (see
+        // asUnpressedRelease), so its mbid is a release group's, and only the archive's
+        // release-group address knows it.
+        if (album.map(ref::equals).orElse(false)) {
+            return coverArtClient.fetchGroupThumbnail(ref.id());
+        }
+        CoverProbe pressing = coverArtClient.fetchThumbnail(ref.id());
+        if (!pressing.conclusive() || pressing.found() || album.isEmpty()) {
+            return pressing;
+        }
+        return albumCoverFor(entity, album.get());
     }
 
     /**
-     * Whether this row is an album rather than one of its pressings.
+     * The album's cover, standing in for a pressing that has none of its own.
      *
-     * <p>A copy with no pressing chosen is mirrored under its album's own id (see
-     * {@link #asUnpressedRelease}), so the row and its release group share an external id.
-     * Its mbid is then a release group's, and only the archive's release-group address knows it.
+     * <p>Plenty of pressings in the archive carry no artwork while their album does, and a
+     * blank sleeve on a shelf reads as broken rather than as "this exact pressing was never
+     * photographed". The album's front is the same record's face, so it is shown instead,
+     * and the row keeps its address so every client draws it. Reported from the field: three
+     * Kate Bush pressings blank on a friend's shelf.
+     *
+     * <p>If the album cannot be asked, nothing is concluded: the pressing's own 404 alone is
+     * not "no cover" any more, so the question stays open for the next lookup.
      */
-    private boolean standsForItsAlbum(ReleaseEntity entity) {
-        return entity.getReleaseGroupId() != null
-                && releaseGroupRepository
-                        .findById(entity.getReleaseGroupId())
-                        .map(group -> entity.getExternalId().equals(group.getExternalId()))
-                        .orElse(false);
+    private CoverProbe albumCoverFor(ReleaseEntity entity, ExternalRef album) {
+        CoverProbe probe = coverArtClient.fetchGroupThumbnail(album.id());
+        if (probe.found()) {
+            entity.setCoverArtUrl(coverArtClient.frontCoverUrlForGroup(album.id()));
+        }
+        return probe;
+    }
+
+    /** The album this row belongs to, when it is a MusicBrainz release group. */
+    private Optional<ExternalRef> albumOf(ReleaseEntity entity) {
+        if (entity.getReleaseGroupId() == null) {
+            return Optional.empty();
+        }
+        return releaseGroupRepository
+                .findById(entity.getReleaseGroupId())
+                .map(group -> ExternalRef.parse(group.getExternalId()))
+                .filter(group -> group.source() == ReleaseSource.MUSICBRAINZ);
     }
 
     private ReleaseDto toDto(ReleaseEntity entity) {
