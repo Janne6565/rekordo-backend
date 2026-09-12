@@ -77,9 +77,10 @@ public class VisibilityService {
     }
 
     /**
-     * Whether the stars show. Two conditions, like the prices: the owner has to have turned
-     * ratings on *and* the viewer has to be allowed the collection. A rating is an opinion
-     * rather than a description of the record, so it is shared on purpose or not at all.
+     * Whether the stars show. Two conditions, like the prices: ratings have to be on *and*
+     * the viewer has to be allowed the collection. Unlike the prices this one is on by
+     * default -- whoever may see the shelf is who the stars are for -- but it is still a
+     * switch, so a collector who wants their opinions to themselves can turn it off.
      */
     @Transactional(readOnly = true)
     public boolean canSeeRatings(UUID viewerId, UUID ownerId) {

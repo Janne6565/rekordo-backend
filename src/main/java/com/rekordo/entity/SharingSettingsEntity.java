@@ -44,7 +44,7 @@ public class SharingSettingsEntity {
     private boolean pricesPublic;
 
     @Column(name = "ratings_shared", nullable = false)
-    private boolean ratingsShared;
+    private boolean ratingsShared = true;
 
     @Column(nullable = false)
     private boolean findable = true;
