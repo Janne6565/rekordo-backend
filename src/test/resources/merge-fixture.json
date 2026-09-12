@@ -68,6 +68,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -114,6 +115,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -162,6 +164,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -207,6 +210,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -252,6 +256,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -300,6 +305,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -345,6 +351,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -390,6 +397,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -438,6 +446,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000005000:0000:a"
         }
       },
@@ -483,6 +492,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000009000:0000:b",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000009000:0000:b"
         }
       },
@@ -528,6 +538,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000009000:0000:b",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000009000:0000:b"
         }
       }
@@ -576,6 +587,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -621,6 +633,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -666,6 +679,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -714,6 +728,7 @@
           "notes": "000000000004000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -759,6 +774,7 @@
           "notes": "000000000006000:0000:b",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -804,6 +820,7 @@
           "notes": "000000000006000:0000:b",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -852,6 +869,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -897,6 +915,7 @@
           "notes": "000000000006000:0000:b",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -942,6 +961,7 @@
           "notes": "000000000006000:0000:b",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -990,6 +1010,7 @@
           "notes": "000000000004000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1035,6 +1056,7 @@
           "notes": "000000000006000:0000:b",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1080,6 +1102,7 @@
           "notes": "000000000006000:0000:b",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -1128,6 +1151,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1173,6 +1197,7 @@
           "notes": "000000000001000:0000:b",
           "rating": "000000000001000:0000:b",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:b"
         }
       },
@@ -1218,6 +1243,7 @@
           "notes": "000000000001000:0000:b",
           "rating": "000000000001000:0000:b",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:b"
         }
       }
@@ -1266,6 +1292,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1311,6 +1338,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1356,6 +1384,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -1404,6 +1433,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1449,6 +1479,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1494,6 +1525,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       }
@@ -1542,6 +1574,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1587,6 +1620,7 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
       },
@@ -1632,8 +1666,154 @@
           "notes": "000000000001000:0000:a",
           "rating": "000000000001000:0000:a",
           "hidden": null,
+          "sortIndex": null,
           "deletedAt": "000000000001000:0000:a"
         }
+      }
+    },
+    {
+      "name": "the shelf arranged on two devices — the later drag places the record",
+      "comment": "Arranging renumbers every copy densely, so two people dragging at once produce two complete orders rather than two fractional insertions. Field-level last-write-wins then resolves per copy, and the worst case is one device's whole order winning — an order somebody actually built — instead of an interleaving neither of them meant.",
+      "local": {
+        "id": "c1",
+        "releaseId": "musicbrainz:r1",
+        "albumId": "musicbrainz:alb-1",
+        "manualTitle": null,
+        "manualArtist": null,
+        "manualYear": null,
+        "manualLabel": null,
+        "manualCatalogNumber": null,
+        "manualFormat": null,
+        "condition": "VG_PLUS",
+        "sleeveCondition": null,
+        "catalogArt": "AUTO",
+        "pricePaidCents": 400,
+        "currency": "EUR",
+        "purchasedOn": "2026-03-14",
+        "purchasedAt": "Ghent market",
+        "notes": "Case is cracked.",
+        "notesConflict": null,
+        "rating": 5,
+        "createdAt": 1000,
+        "deletedAt": null,
+        "fieldClocks": {
+          "releaseId": "000000000001000:0000:a",
+          "albumId": "000000000001000:0000:a",
+          "manualTitle": "000000000001000:0000:a",
+          "manualArtist": "000000000001000:0000:a",
+          "manualYear": "000000000001000:0000:a",
+          "manualLabel": "000000000001000:0000:a",
+          "manualCatalogNumber": "000000000001000:0000:a",
+          "manualFormat": "000000000001000:0000:a",
+          "pendingBarcode": null,
+          "condition": "000000000001000:0000:a",
+          "sleeveCondition": "000000000001000:0000:a",
+          "catalogArt": "000000000001000:0000:a",
+          "pricePaidCents": "000000000001000:0000:a",
+          "currency": "000000000001000:0000:a",
+          "purchasedOn": "000000000001000:0000:a",
+          "purchasedAt": "000000000001000:0000:a",
+          "notes": "000000000001000:0000:a",
+          "rating": "000000000001000:0000:a",
+          "hidden": null,
+          "deletedAt": "000000000001000:0000:a",
+          "sortIndex": "000000000001000:0000:a"
+        },
+        "sortIndex": 3
+      },
+      "remote": {
+        "id": "c1",
+        "releaseId": "musicbrainz:r1",
+        "albumId": "musicbrainz:alb-1",
+        "manualTitle": null,
+        "manualArtist": null,
+        "manualYear": null,
+        "manualLabel": null,
+        "manualCatalogNumber": null,
+        "manualFormat": null,
+        "condition": "VG_PLUS",
+        "sleeveCondition": null,
+        "catalogArt": "AUTO",
+        "pricePaidCents": 400,
+        "currency": "EUR",
+        "purchasedOn": "2026-03-14",
+        "purchasedAt": "Ghent market",
+        "notes": "Case is cracked.",
+        "notesConflict": null,
+        "rating": 5,
+        "createdAt": 1000,
+        "deletedAt": null,
+        "fieldClocks": {
+          "releaseId": "000000000001000:0000:a",
+          "albumId": "000000000001000:0000:a",
+          "manualTitle": "000000000001000:0000:a",
+          "manualArtist": "000000000001000:0000:a",
+          "manualYear": "000000000001000:0000:a",
+          "manualLabel": "000000000001000:0000:a",
+          "manualCatalogNumber": "000000000001000:0000:a",
+          "manualFormat": "000000000001000:0000:a",
+          "pendingBarcode": null,
+          "condition": "000000000001000:0000:a",
+          "sleeveCondition": "000000000001000:0000:a",
+          "catalogArt": "000000000001000:0000:a",
+          "pricePaidCents": "000000000001000:0000:a",
+          "currency": "000000000001000:0000:a",
+          "purchasedOn": "000000000001000:0000:a",
+          "purchasedAt": "000000000001000:0000:a",
+          "notes": "000000000001000:0000:a",
+          "rating": "000000000001000:0000:a",
+          "hidden": null,
+          "deletedAt": "000000000001000:0000:a",
+          "sortIndex": "000000000002000:0000:b"
+        },
+        "sortIndex": 0
+      },
+      "expected": {
+        "id": "c1",
+        "releaseId": "musicbrainz:r1",
+        "albumId": "musicbrainz:alb-1",
+        "manualTitle": null,
+        "manualArtist": null,
+        "manualYear": null,
+        "manualLabel": null,
+        "manualCatalogNumber": null,
+        "manualFormat": null,
+        "condition": "VG_PLUS",
+        "sleeveCondition": null,
+        "catalogArt": "AUTO",
+        "pricePaidCents": 400,
+        "currency": "EUR",
+        "purchasedOn": "2026-03-14",
+        "purchasedAt": "Ghent market",
+        "notes": "Case is cracked.",
+        "notesConflict": null,
+        "rating": 5,
+        "createdAt": 1000,
+        "deletedAt": null,
+        "fieldClocks": {
+          "releaseId": "000000000001000:0000:a",
+          "albumId": "000000000001000:0000:a",
+          "manualTitle": "000000000001000:0000:a",
+          "manualArtist": "000000000001000:0000:a",
+          "manualYear": "000000000001000:0000:a",
+          "manualLabel": "000000000001000:0000:a",
+          "manualCatalogNumber": "000000000001000:0000:a",
+          "manualFormat": "000000000001000:0000:a",
+          "pendingBarcode": null,
+          "condition": "000000000001000:0000:a",
+          "sleeveCondition": "000000000001000:0000:a",
+          "catalogArt": "000000000001000:0000:a",
+          "pricePaidCents": "000000000001000:0000:a",
+          "currency": "000000000001000:0000:a",
+          "purchasedOn": "000000000001000:0000:a",
+          "purchasedAt": "000000000001000:0000:a",
+          "notes": "000000000001000:0000:a",
+          "rating": "000000000001000:0000:a",
+          "hidden": null,
+          "deletedAt": "000000000001000:0000:a",
+          "sortIndex": "000000000002000:0000:b"
+        },
+        "sortIndex": 0
       }
     }
   ]

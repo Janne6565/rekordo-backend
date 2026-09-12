@@ -130,6 +130,6 @@ class CopyMergeTest {
                 copy.pricePaidCents(),
                 copy.currency(),
                 copy.purchasedOn(), copy.purchasedAt(), copy.notes(), copy.notesConflict(), copy.rating(),
-                copy.hidden(), copy.createdAt(), copy.deletedAt(), copy.fieldClocks());
+                copy.hidden(), copy.sortIndex(), copy.createdAt(), copy.deletedAt(), copy.fieldClocks());
     }
 }

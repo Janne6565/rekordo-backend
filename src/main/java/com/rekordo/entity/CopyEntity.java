@@ -120,6 +120,13 @@ public class CopyEntity {
     @Column(nullable = false)
     private boolean hidden;
 
+    /**
+     * Where the copy sits on a hand-arranged shelf, or null while it has never been placed
+     * (V47). Nullable on purpose: null is "not placed", which is not position 0.
+     */
+    @Column(name = "sort_index")
+    private Integer sortIndex;
+
     @Column(name = "deleted_at")
     private Long deletedAt;
 

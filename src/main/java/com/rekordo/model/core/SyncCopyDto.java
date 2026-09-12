@@ -80,6 +80,12 @@ public record SyncCopyDto(
          * reads as not hidden.
          */
         Boolean hidden,
+        /**
+         * Where the copy sits on a hand-arranged shelf, or null while nobody has arranged
+         * one -- which is also what every client older than the field sends, and reads the
+         * same way.
+         */
+        Integer sortIndex,
         Long createdAt,
         Long deletedAt,
         /** Encoded HLC per mergeable field: {@code wall:counter:node}, fixed width. */

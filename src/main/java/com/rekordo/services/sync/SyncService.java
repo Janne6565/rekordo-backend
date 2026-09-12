@@ -192,10 +192,18 @@ public class SyncService {
      *
      * <p>So the server answers for all three. A row it already holds keeps what the upload
      * endpoint wrote; a row it is meeting for the first time gets the key those two ids
-     * derive, and a type off the allowlist rather than whatever the push said. The client is
-     * not told off for it: a push that fails costs the whole batch and comes back for ever
-     * (see {@link #storable(String, String, Long)}), and correcting three fields is cheaper
-     * than that for the honest client that got them wrong.
+     * derive, a type off the allowlist rather than whatever the push said, and a size of
+     * zero. The client is not told off for it: a push that fails costs the whole batch and
+     * comes back for ever (see {@link #storable(String, String, Long)}), and correcting
+     * three fields is cheaper than that for the honest client that got them wrong.
+     *
+     * <p>Zero rather than the pushed figure, because the size is what the allowance is
+     * counted from and only the upload endpoint has ever measured it. A client that could
+     * assert it could assert a negative one, and a negative one makes
+     * {@link com.rekordo.services.storage.StorageUsageService} read the whole account as
+     * owing nothing -- so the 20 MB ceiling stops applying to it. Nothing legitimate is lost:
+     * a live photo reaches a push only after its bytes were uploaded, and the upload wrote
+     * the row this branch is for the absence of.
      *
      * <p>A null key stays null. That is a picture deleted before its upload finished, and the
      * tombstone is the only thing carrying the delete to the other devices.
@@ -206,13 +214,21 @@ public class SyncService {
                 ? stored.getStorageKey()
                 : merged.storageKey() == null ? null : PhotoService.objectKey(userId, id);
         String contentType = known ? stored.getContentType() : PhotoService.servableType(merged.contentType());
-        Long byteSize = known ? stored.getByteSize() : merged.byteSize();
+        Long byteSize = known ? stored.getByteSize() : 0L;
 
         if (merged.storageKey() != null && !merged.storageKey().equals(storageKey)) {
             // Worth saying out loud: no client this project ships can produce one, so a
             // mismatch is either a build nobody remembers or somebody reaching for another
             // account's bytes.
             log.warn("Push for photo {} named storage key {} and did not get it", id, merged.storageKey());
+        }
+        if (merged.byteSize() != null && merged.byteSize() < 0) {
+            // Only the negative case. An honest client's figure can differ from the stored
+            // one by a byte or two -- it measures the blob it picked, the upload endpoint
+            // measures what arrived -- and warning on every such difference would bury the
+            // line that matters. A size below zero is nobody's rounding error: it is the
+            // one value that makes the allowance stop applying.
+            log.warn("Push for photo {} named a negative byte size ({})", id, merged.byteSize());
         }
 
         return new SyncPhotoDto(
@@ -236,7 +252,10 @@ public class SyncService {
         entity.setWishId(parseId(dto.wishId()));
         entity.setStorageKey(dto.storageKey());
         entity.setContentType(dto.contentType() == null ? PhotoService.FALLBACK_TYPE : dto.contentType());
-        entity.setByteSize(dto.byteSize() == null ? 0L : dto.byteSize());
+        // Floored as well as owned by ownBytes above. The column is what the allowance is
+        // summed from, and a belt-and-braces clamp here is what makes the CHECK constraint
+        // V48 adds something the app can never trip rather than a 500 waiting to happen.
+        entity.setByteSize(dto.byteSize() == null ? 0L : Math.max(0L, dto.byteSize()));
         entity.setSortIndex(dto.sortIndex() == null ? 0 : dto.sortIndex());
         entity.setCreatedAt(dto.createdAt());
         entity.setDeletedAt(dto.deletedAt());
@@ -580,6 +599,8 @@ public class SyncService {
         entity.setRating(dto.rating());
         // Absent means a client older than the field, which is the same as not hidden.
         entity.setHidden(Boolean.TRUE.equals(dto.hidden()));
+        // Absent means a client older than the field, which is the same as never placed.
+        entity.setSortIndex(dto.sortIndex());
         entity.setCreatedAt(dto.createdAt());
         entity.setDeletedAt(dto.deletedAt());
         entity.setFieldClocks(writeClocks(dto.fieldClocks()));
@@ -608,6 +629,7 @@ public class SyncService {
                 entity.getNotesConflict(),
                 entity.getRating(),
                 entity.isHidden(),
+                entity.getSortIndex(),
                 entity.getCreatedAt(),
                 entity.getDeletedAt(),
                 readClocks(entity.getFieldClocks()));
