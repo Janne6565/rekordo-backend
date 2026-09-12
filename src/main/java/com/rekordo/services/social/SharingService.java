@@ -66,6 +66,10 @@ public class SharingService {
         settings.setCollectionVisibility(request.collectionVisibility());
         settings.setWishlistVisibility(request.wishlistVisibility());
         settings.setPricesPublic(request.pricesPublic());
+        // Absent means untouched: see UpdateSharingRequest on why this one field may be null.
+        if (request.ratingsShared() != null) {
+            settings.setRatingsShared(request.ratingsShared());
+        }
         settings.setFindable(request.findable());
         settings.setUpdatedAt(Instant.now());
         if (settings.getCreatedAt() == null) {
@@ -74,11 +78,12 @@ public class SharingService {
         repository.save(settings);
 
         log.debug(
-                "User {} now shares collection={} wishlist={} prices={} findable={}",
+                "User {} now shares collection={} wishlist={} prices={} ratings={} findable={}",
                 userId,
                 settings.getCollectionVisibility(),
                 settings.getWishlistVisibility(),
                 settings.isPricesPublic(),
+                settings.isRatingsShared(),
                 settings.isFindable());
         return toDto(userId, settings);
     }
@@ -91,6 +96,7 @@ public class SharingService {
                 settings.getCollectionVisibility(),
                 settings.getWishlistVisibility(),
                 settings.isPricesPublic(),
+                settings.isRatingsShared(),
                 handleService.changesRemaining(userId));
     }
 }

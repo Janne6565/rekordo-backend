@@ -76,6 +76,21 @@ public class VisibilityService {
         return standingOf(viewerId, ownerId) != Standing.STRANGER;
     }
 
+    /**
+     * Whether the stars show. Two conditions, like the prices: the owner has to have turned
+     * ratings on *and* the viewer has to be allowed the collection. A rating is an opinion
+     * rather than a description of the record, so it is shared on purpose or not at all.
+     */
+    @Transactional(readOnly = true)
+    public boolean canSeeRatings(UUID viewerId, UUID ownerId) {
+        Standing standing = standingOf(viewerId, ownerId);
+        if (standing == Standing.OWNER) {
+            return true;
+        }
+        SharingSettingsEntity settings = settings(ownerId);
+        return settings.isRatingsShared() && allows(standing, settings.getCollectionVisibility());
+    }
+
     private boolean allows(Standing standing, Visibility setting) {
         return switch (standing) {
             case OWNER -> true;

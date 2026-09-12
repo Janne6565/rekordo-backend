@@ -34,10 +34,15 @@ class VisibilityServiceTest {
     @InjectMocks private VisibilityService service;
 
     private void owner(Visibility collection, Visibility wishlist, boolean prices) {
+        owner(collection, wishlist, prices, false);
+    }
+
+    private void owner(Visibility collection, Visibility wishlist, boolean prices, boolean ratings) {
         SharingSettingsEntity settings = SharingSettingsEntity.defaultsFor(OWNER);
         settings.setCollectionVisibility(collection);
         settings.setWishlistVisibility(wishlist);
         settings.setPricesPublic(prices);
+        settings.setRatingsShared(ratings);
         when(sharingService.settingsFor(OWNER)).thenReturn(settings);
         when(friendshipService.areFriends(FRIEND, OWNER)).thenReturn(true);
         when(friendshipService.areFriends(STRANGER, OWNER)).thenReturn(false);
@@ -52,6 +57,7 @@ class VisibilityServiceTest {
         assertThat(service.canSeeWishlist(OWNER, OWNER)).isTrue();
         assertThat(service.canSeePrices(OWNER, OWNER)).isTrue();
         assertThat(service.canSeeGrades(OWNER, OWNER)).isTrue();
+        assertThat(service.canSeeRatings(OWNER, OWNER)).isTrue();
     }
 
     @Test
@@ -113,6 +119,43 @@ class VisibilityServiceTest {
 
         assertThat(service.canSeePrices(FRIEND, OWNER)).isTrue();
         assertThat(service.canSeePrices(STRANGER, OWNER)).isFalse();
+    }
+
+    @Test
+    void ratingsStayHiddenEvenOnAPublicShelfUntilTheOwnerTurnsThemOn() {
+        owner(Visibility.PUBLIC, Visibility.PUBLIC, true, false);
+
+        assertThat(service.canSeeCollection(STRANGER, OWNER)).isTrue();
+        // Prices on, ratings off: the two switches are separate answers.
+        assertThat(service.canSeeRatings(FRIEND, OWNER)).isFalse();
+        assertThat(service.canSeeRatings(STRANGER, OWNER)).isFalse();
+    }
+
+    @Test
+    void ratingsNeedBothTheToggleAndAccessToTheCollection() {
+        // Ratings on, shelf shut. Turning the stars on does not open the shelf.
+        owner(Visibility.ONLY_ME, Visibility.PUBLIC, false, true);
+
+        assertThat(service.canSeeRatings(FRIEND, OWNER)).isFalse();
+        assertThat(service.canSeeRatings(STRANGER, OWNER)).isFalse();
+    }
+
+    @Test
+    void ratingsReachWhoeverTheCollectionReachesOnceTheyAreOn() {
+        owner(Visibility.FRIENDS, Visibility.FRIENDS, false, true);
+
+        assertThat(service.canSeeRatings(FRIEND, OWNER)).isTrue();
+        assertThat(service.canSeeRatings(STRANGER, OWNER)).isFalse();
+        assertThat(service.canSeeRatings(null, OWNER)).isFalse();
+    }
+
+    @Test
+    void ratingsOnAPublicShelfReachAnyone() {
+        // Unlike the grades, which stop at the people the owner knows: the stars are shared
+        // on purpose, so the owner has already answered this question by turning them on.
+        owner(Visibility.PUBLIC, Visibility.PUBLIC, false, true);
+
+        assertThat(service.canSeeRatings(STRANGER, OWNER)).isTrue();
     }
 
     @Test

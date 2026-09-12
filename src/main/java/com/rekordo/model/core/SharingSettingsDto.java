@@ -13,5 +13,7 @@ public record SharingSettingsDto(
         Visibility collectionVisibility,
         Visibility wishlistVisibility,
         boolean pricesPublic,
+        /** Whether the stars travel with the shelf. Off until it is turned on. */
+        boolean ratingsShared,
         /** How many handle changes are left inside the current window. */
         int handleChangesRemaining) {}

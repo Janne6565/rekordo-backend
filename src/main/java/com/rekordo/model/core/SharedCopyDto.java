@@ -36,6 +36,12 @@ public record SharedCopyDto(
         String condition,
         /** Sleeve grade. Friends and up; null on a public page. */
         String sleeveCondition,
+        /**
+         * One to five stars, or null: both when the copy is unrated and when the owner has
+         * not turned ratings on. The clients draw nothing either way, so the two cases look
+         * the same from outside, which is the point.
+         */
+        Integer rating,
         /** Null unless the owner has turned prices on. */
         Integer pricePaidCents,
         String currency,

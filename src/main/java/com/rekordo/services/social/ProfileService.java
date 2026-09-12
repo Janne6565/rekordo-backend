@@ -117,6 +117,7 @@ public class ProfileService {
         }
         boolean prices = visibilityService.canSeePrices(viewerId, owner.getId());
         boolean grades = visibilityService.canSeeGrades(viewerId, owner.getId());
+        boolean ratings = visibilityService.canSeeRatings(viewerId, owner.getId());
 
         List<CopyEntity> copies = copyRepository.findVisible(owner.getId(), PageRequest.of(0, LIST_LIMIT + 1));
         boolean truncated = copies.size() > LIST_LIMIT;
@@ -131,7 +132,8 @@ public class ProfileService {
                     releases.get(catalogueKeyOf(copy)),
                     previews.get(copy.getId()),
                     prices,
-                    grades));
+                    grades,
+                    ratings));
         }
         return new SharedCollectionDto(dtos, copyRepository.countVisible(owner.getId()), truncated);
     }
@@ -258,7 +260,12 @@ public class ProfileService {
     }
 
     private SharedCopyDto toDto(
-            CopyEntity copy, ReleaseDto release, UUID previewPhotoId, boolean prices, boolean grades) {
+            CopyEntity copy,
+            ReleaseDto release,
+            UUID previewPhotoId,
+            boolean prices,
+            boolean grades,
+            boolean ratings) {
         String title = firstNonBlank(copy.getManualTitle(), release == null ? null : release.title(), "Untitled");
         String artist =
                 firstNonBlank(copy.getManualArtist(), release == null ? null : release.artistName(), "Unknown artist");
@@ -279,6 +286,7 @@ public class ProfileService {
                 release == null ? null : release.coverTheme(),
                 grades ? copy.getCondition() : null,
                 grades ? copy.getSleeveCondition() : null,
+                ratings ? copy.getRating() : null,
                 prices ? copy.getPricePaidCents() : null,
                 prices ? copy.getCurrency() : null,
                 copy.getCreatedAt());
