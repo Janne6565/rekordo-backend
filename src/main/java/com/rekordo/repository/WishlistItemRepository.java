@@ -18,12 +18,13 @@ public interface WishlistItemRepository extends JpaRepository<WishlistItemEntity
 
     /**
      * What someone else may see of a wishlist. Entries still waiting for a name are left
-     * out for the same reason pending copies are — see {@code CopyRepository.findVisible}.
+     * out for the same reason pending copies are — see {@code CopyRepository.findVisible},
+     * which also explains the order: the owner's own arrangement, unplaced entries last.
      */
     @Query("""
             SELECT w FROM WishlistItemEntity w
             WHERE w.userId = :userId AND w.deletedAt IS NULL AND w.pendingBarcode IS NULL
-            ORDER BY w.createdAt DESC
+            ORDER BY w.sortIndex ASC NULLS LAST, w.createdAt DESC, w.id
             """)
     List<WishlistItemEntity> findVisible(@Param("userId") UUID userId, Pageable pageable);
 

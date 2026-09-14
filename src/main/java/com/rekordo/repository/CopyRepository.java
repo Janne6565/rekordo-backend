@@ -29,12 +29,17 @@ public interface CopyRepository extends JpaRepository<CopyEntity, UUID> {
      * look up yet. On their own shelf it is a row that says so and names its digits; on
      * somebody else's screen it would be an "Untitled" placeholder that neither person can
      * act on, and it stops being one the moment any of the owner's devices gets a signal.
+     *
+     * <p>Ordered the way the owner arranged their shelf — the shared {@code compareManualOrder}
+     * rule: placed copies by {@code sortIndex}, never-placed ones after them, newest first.
+     * The order is part of what the list says, and the cut at {@code LIST_LIMIT} has to fall
+     * in the same place the owner would see it.
      */
     @Query("""
             SELECT c FROM CopyEntity c
             WHERE c.userId = :userId AND c.deletedAt IS NULL AND c.hidden = FALSE
               AND c.pendingBarcode IS NULL
-            ORDER BY c.createdAt DESC
+            ORDER BY c.sortIndex ASC NULLS LAST, c.createdAt DESC, c.id
             """)
     List<CopyEntity> findVisible(@Param("userId") UUID userId, Pageable pageable);
 
