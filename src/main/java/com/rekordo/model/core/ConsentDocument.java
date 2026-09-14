@@ -15,7 +15,7 @@ public enum ConsentDocument {
     TERMS("1.0"),
 
     /** The Datenschutzerklärung, which is read rather than agreed to -- the record is the same. */
-    PRIVACY("1.0"),
+    PRIVACY("1.1"),
 
     /**
      * "I am 16 or older", the age at which Art. 8 DSGVO stops asking for a parent in Germany.
