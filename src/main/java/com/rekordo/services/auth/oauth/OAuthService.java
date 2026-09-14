@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * The authorization-code half of external sign-in.
@@ -67,9 +69,11 @@ public class OAuthService {
      * <p>Two values rather than one because the state alone proves nothing about who is
      * finishing the flow. The caller puts the binding in a cookie; only the browser that
      * started this can then complete it.
+     *
+     * @param requestHost the host this request arrived on; see {@link #redirectUri}
      */
     @Transactional
-    public Authorization authorizeUrl(String providerId, OAuthClient client) {
+    public Authorization authorizeUrl(String providerId, OAuthClient client, String requestHost) {
         OAuthProperties.Provider provider = require(providerId);
 
         byte[] raw = new byte[32];
@@ -92,7 +96,7 @@ public class OAuthService {
 
         UriComponentsBuilder url = UriComponentsBuilder.fromUriString(provider.authorizeUrl())
                 .queryParam("client_id", provider.clientId())
-                .queryParam("redirect_uri", redirectUri(providerId))
+                .queryParam("redirect_uri", redirectUri(providerId, requestHost))
                 .queryParam("response_type", "code")
                 .queryParam("scope", provider.scope() == null ? "openid email profile" : provider.scope())
                 .queryParam("state", state);
@@ -173,8 +177,14 @@ public class OAuthService {
         return properties.safeMobileRedirectUri();
     }
 
-    /** Exchanges the code for the provider's view of who just signed in. */
-    public ExternalIdentity exchange(String providerId, String code) {
+    /**
+     * Exchanges the code for the provider's view of who just signed in.
+     *
+     * @param requestHost the host the callback arrived on. The provider refuses the exchange
+     *     unless its redirect URI is identical to the one the authorize step sent, and the
+     *     callback lands on exactly the host that URI named.
+     */
+    public ExternalIdentity exchange(String providerId, String code, String requestHost) {
         OAuthProperties.Provider provider = require(providerId);
         String secret = "apple".equals(providerId) ? AppleClientSecret.create(provider) : provider.clientSecret();
 
@@ -186,7 +196,10 @@ public class OAuthService {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .body("grant_type=authorization_code&code=%s&redirect_uri=%s&client_id=%s&client_secret=%s"
                             .formatted(
-                                    enc(code), enc(redirectUri(providerId)), enc(provider.clientId()), enc(secret)))
+                                    enc(code),
+                                    enc(redirectUri(providerId, requestHost)),
+                                    enc(provider.clientId()),
+                                    enc(secret)))
                     .retrieve()
                     .body(Map.class);
         } catch (RuntimeException e) {
@@ -245,10 +258,55 @@ public class OAuthService {
                         identity.subject(), identity.email(), identity.emailVerified(), name);
     }
 
-    public String redirectUri(String providerId) {
-        String base = properties.publicBaseUrl();
-        return (base.endsWith("/") ? base.substring(0, base.length() - 1) : base)
-                + "/api/v1/auth/oauth/" + providerId + "/callback";
+    /**
+     * The callback the provider is told to return to.
+     *
+     * <p>It follows the host the request arrived on, because the state cookie was set on
+     * that host and only comes back if the provider returns there. A phone build still
+     * pointed at the app's previous host depends on it. Only a configured origin is ever
+     * used, and always as configured: the host header is the caller's to write, and TLS ends
+     * at the ingress, so the scheme this server sees is not the one the provider must use.
+     *
+     * @param requestHost the host the request arrived on, without or with a port; anything
+     *     not on the list falls back to {@code publicBaseUrl}
+     */
+    public String redirectUri(String providerId, String requestHost) {
+        return originFor(requestHost) + "/api/v1/auth/oauth/" + providerId + "/callback";
+    }
+
+    private String originFor(String requestHost) {
+        String fallback = trimSlash(properties.publicBaseUrl());
+        if (requestHost == null || requestHost.isBlank()) {
+            return fallback;
+        }
+        String host = stripPort(requestHost.trim());
+        return Stream.concat(
+                        Stream.of(fallback),
+                        properties.safeCallbackOrigins().stream().map(OAuthService::trimSlash))
+                .filter(origin -> host.equalsIgnoreCase(hostOf(origin)))
+                .findFirst()
+                .orElse(fallback);
+    }
+
+    private static String hostOf(String origin) {
+        try {
+            String host = URI.create(origin).getHost();
+            return host == null ? "" : host;
+        } catch (IllegalArgumentException e) {
+            // A malformed entry matches nothing rather than taking every sign-in down with it.
+            return "";
+        }
+    }
+
+    private static String stripPort(String host) {
+        // A bracketed IPv6 literal carries colons of its own; only a colon after the bracket
+        // starts a port.
+        int colon = host.lastIndexOf(':');
+        return colon > host.lastIndexOf(']') ? host.substring(0, colon) : host;
+    }
+
+    private static String trimSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private static String enc(String value) {

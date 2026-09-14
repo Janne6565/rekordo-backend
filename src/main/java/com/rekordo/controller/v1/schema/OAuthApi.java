@@ -7,6 +7,7 @@ import com.rekordo.services.auth.oauth.OAuthStateCookieFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -46,7 +47,11 @@ public interface OAuthApi {
                     + "native app with a one-time code instead of setting the refresh cookie.")
     @ApiResponse(responseCode = "302", description = "Redirect to the provider")
     ResponseEntity<Void> authorize(
-            @PathVariable String provider, @RequestParam(required = false) String client);
+            @PathVariable String provider,
+            @RequestParam(required = false) String client,
+            // Not an API parameter: springdoc leaves the servlet request out of the schema.
+            // It supplies the host the flow started on, which the redirect URI has to follow.
+            HttpServletRequest request);
 
     @GetMapping("/oauth/{provider}/callback")
     @Operation(
@@ -60,7 +65,8 @@ public interface OAuthApi {
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String error,
-            @CookieValue(name = OAuthStateCookieFactory.COOKIE_NAME, required = false) String binding);
+            @CookieValue(name = OAuthStateCookieFactory.COOKIE_NAME, required = false) String binding,
+            HttpServletRequest request);
 
     @PostMapping("/oauth/{provider}/callback")
     @Operation(
@@ -75,7 +81,8 @@ public interface OAuthApi {
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String error,
             @RequestParam(required = false) String user,
-            @CookieValue(name = OAuthStateCookieFactory.COOKIE_NAME, required = false) String binding);
+            @CookieValue(name = OAuthStateCookieFactory.COOKIE_NAME, required = false) String binding,
+            HttpServletRequest request);
 
     @PostMapping("/oauth/exchange")
     @Operation(

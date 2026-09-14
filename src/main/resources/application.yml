@@ -91,6 +91,14 @@ rekordo:
     # same breath as the shipped app's scheme, or a build that is listening for
     # musiccollector:// never learns its sign-in finished.
     mobile-redirect-uri: ${MC_MOBILE_REDIRECT_URI:musiccollector://auth/callback}
+    # Other origins a sign-in may come back to, comma-separated, e.g. the host this app lived
+    # on before public-base-url moved. A phone build has its server compiled in and keeps
+    # starting sign-in on that host, which is where its state cookie is set; if the provider
+    # returned to the new host instead, the cookie would not come back and every one of those
+    # builds would be refused. The redirect URI follows the host the request arrived on, but
+    # only for a host listed here (or public-base-url's own). Each entry has to be registered
+    # as a callback with every provider, or the provider refuses it.
+    callback-origins: ${MC_OAUTH_CALLBACK_ORIGINS:}
     # A provider appears on the sign-in screen only when its credentials are set, so an
     # unconfigured one is invisible rather than a button that fails.
     providers:

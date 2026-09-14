@@ -13,6 +13,7 @@ import com.rekordo.services.auth.oauth.OAuthHandoffService;
 import com.rekordo.services.auth.oauth.OAuthService;
 import com.rekordo.services.auth.oauth.OAuthStateCookieFactory;
 import com.rekordo.services.auth.oauth.OAuthUserResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +45,9 @@ public class OAuthController implements OAuthApi {
     }
 
     @Override
-    public ResponseEntity<Void> authorize(String provider, String client) {
+    public ResponseEntity<Void> authorize(String provider, String client, HttpServletRequest request) {
         OAuthService.Authorization authorization =
-                oauthService.authorizeUrl(provider, OAuthClient.fromParam(client));
+                oauthService.authorizeUrl(provider, OAuthClient.fromParam(client), request.getServerName());
         // The redirect carries the cookie that says this browser is the one signing in. It
         // has to be set here rather than at the callback, because by then the only thing
         // proving anything is whether it came back.
@@ -61,14 +62,21 @@ public class OAuthController implements OAuthApi {
     }
 
     @Override
-    public ResponseEntity<Void> callback(String provider, String code, String state, String error, String binding) {
-        return complete(provider, code, state, error, null, binding);
+    public ResponseEntity<Void> callback(
+            String provider, String code, String state, String error, String binding, HttpServletRequest request) {
+        return complete(provider, code, state, error, null, binding, request.getServerName());
     }
 
     @Override
     public ResponseEntity<Void> callbackPosted(
-            String provider, String code, String state, String error, String user, String binding) {
-        return complete(provider, code, state, error, user, binding);
+            String provider,
+            String code,
+            String state,
+            String error,
+            String user,
+            String binding,
+            HttpServletRequest request) {
+        return complete(provider, code, state, error, user, binding, request.getServerName());
     }
 
     @Override
@@ -81,7 +89,13 @@ public class OAuthController implements OAuthApi {
     }
 
     private ResponseEntity<Void> complete(
-            String provider, String code, String state, String error, String appleUserJson, String binding) {
+            String provider,
+            String code,
+            String state,
+            String error,
+            String appleUserJson,
+            String binding,
+            String host) {
         if (error != null || code == null) {
             // Read rather than consumed: there is nothing to complete, and burning the state
             // would only stop the person retrying from the screen they are about to see.
@@ -89,8 +103,10 @@ public class OAuthController implements OAuthApi {
         }
         try {
             OAuthClient client = oauthService.consumeState(provider, state, binding);
+            // The callback's own host, because it is the one the authorize step named in the
+            // redirect URI, and the exchange has to repeat that URI exactly.
             UserEntity user = userResolver.resolve(
-                    provider, oauthService.named(oauthService.exchange(provider, code), appleUserJson));
+                    provider, oauthService.named(oauthService.exchange(provider, code, host), appleUserJson));
 
             if (client == OAuthClient.MOBILE) {
                 // The app cannot read the browser's cookie jar, so it gets a one-time code

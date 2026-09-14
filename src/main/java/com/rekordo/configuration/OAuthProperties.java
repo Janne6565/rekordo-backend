@@ -2,6 +2,7 @@ package com.rekordo.configuration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,10 +18,20 @@ import java.util.Map;
  *                           A custom URL scheme, so the phone reopens the app rather than
  *                           leaving the person looking at the website they just signed
  *                           into. It is never given to the provider — providers only ever
- *                           see {@code publicBaseUrl}.
+ *                           see {@code publicBaseUrl} or one of {@code callbackOrigins}.
+ * @param callbackOrigins    further origins a sign-in may start and finish on. A phone build
+ *                           has its server's host compiled in, so after the app moves host
+ *                           the builds already in the stores keep starting sign-in on the
+ *                           old one. The state cookie is set on that host, and it only comes
+ *                           back if the provider returns there too. The origin of
+ *                           {@code publicBaseUrl} is always allowed without being listed.
  */
 @ConfigurationProperties(prefix = "rekordo.oauth")
-public record OAuthProperties(String publicBaseUrl, String mobileRedirectUri, Map<String, Provider> providers) {
+public record OAuthProperties(
+        String publicBaseUrl,
+        String mobileRedirectUri,
+        Map<String, Provider> providers,
+        List<String> callbackOrigins) {
 
     /**
      * @param clientSecret for Apple this is a private key in PKCS#8 (the contents of the
@@ -62,5 +73,11 @@ public record OAuthProperties(String publicBaseUrl, String mobileRedirectUri, Ma
 
     public Map<String, Provider> safeProviders() {
         return providers == null ? Map.of() : providers;
+    }
+
+    public List<String> safeCallbackOrigins() {
+        return callbackOrigins == null
+                ? List.of()
+                : callbackOrigins.stream().filter(origin -> origin != null && !origin.isBlank()).toList();
     }
 }

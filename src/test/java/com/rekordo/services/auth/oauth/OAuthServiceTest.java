@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -50,8 +51,13 @@ class OAuthServiceTest {
     }
 
     private OAuthService service(Map<String, OAuthProperties.Provider> providers) {
+        return service(providers, List.of());
+    }
+
+    private OAuthService service(Map<String, OAuthProperties.Provider> providers, List<String> callbackOrigins) {
         return new OAuthService(
-                new OAuthProperties("https://music.example", "musiccollector://auth/callback", providers),
+                new OAuthProperties(
+                        "https://music.example", "musiccollector://auth/callback", providers, callbackOrigins),
                 stateRepository);
     }
 
@@ -59,14 +65,14 @@ class OAuthServiceTest {
     void asksAppleToPostTheCallbackBack() {
         // Apple rejects the request outright if name or e-mail scope is asked for without
         // this, so its absence would break every Apple sign-in on the first attempt.
-        String url = service(Map.of("apple", applePostsBack())).authorizeUrl("apple", OAuthClient.WEB).url();
+        String url = service(Map.of("apple", applePostsBack())).authorizeUrl("apple", OAuthClient.WEB, null).url();
 
         assertThat(url).contains("response_mode=form_post");
     }
 
     @Test
     void leavesResponseModeOffForProvidersThatRedirectNormally() {
-        String url = service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB).url();
+        String url = service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB, null).url();
 
         assertThat(url).doesNotContain("response_mode");
     }
@@ -84,7 +90,7 @@ class OAuthServiceTest {
     void refusesToStartAFlowForAnUnconfiguredProvider() {
         var service = service(Map.of("apple", unconfigured()));
 
-        assertThatThrownBy(() -> service.authorizeUrl("apple", OAuthClient.WEB))
+        assertThatThrownBy(() -> service.authorizeUrl("apple", OAuthClient.WEB, null))
                 .isInstanceOf(OAuthFailedException.class);
     }
 
@@ -92,7 +98,7 @@ class OAuthServiceTest {
     void refusesAProviderItHasNeverHeardOf() {
         var service = service(Map.of("google", configured()));
 
-        assertThatThrownBy(() -> service.authorizeUrl("myspace", OAuthClient.WEB))
+        assertThatThrownBy(() -> service.authorizeUrl("myspace", OAuthClient.WEB, null))
                 .isInstanceOf(OAuthFailedException.class);
     }
 
@@ -100,7 +106,7 @@ class OAuthServiceTest {
     void buildsAnAuthorizeUrlCarryingAFreshState() {
         when(stateRepository.save(any())).thenAnswer(call -> call.getArgument(0));
 
-        String url = service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB).url();
+        String url = service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB, null).url();
 
         assertThat(url).startsWith("https://accounts.example/authorize");
         assertThat(url).contains("client_id=client-id");
@@ -115,7 +121,7 @@ class OAuthServiceTest {
         // URI.create throw on the very first sign-in with any real provider.
         when(stateRepository.save(any())).thenAnswer(call -> call.getArgument(0));
 
-        String url = service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB).url();
+        String url = service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB, null).url();
 
         assertThat(url).doesNotContain(" ");
         assertThat(url).contains("scope=openid%20email");
@@ -124,8 +130,66 @@ class OAuthServiceTest {
 
     @Test
     void theRedirectUriMatchesWhatTheProviderMustHaveRegistered() {
-        assertThat(service(Map.of("google", configured())).redirectUri("google"))
+        assertThat(service(Map.of("google", configured())).redirectUri("google", null))
                 .isEqualTo("https://music.example/api/v1/auth/oauth/google/callback");
+    }
+
+    @Test
+    void aHostItDoesNotKnowGetsThePublicBaseUrl() {
+        var service = service(Map.of("google", configured()), List.of("https://old.example"));
+
+        assertThat(service.redirectUri("google", "   "))
+                .isEqualTo("https://music.example/api/v1/auth/oauth/google/callback");
+        assertThat(service.redirectUri("google", "elsewhere.example"))
+                .isEqualTo("https://music.example/api/v1/auth/oauth/google/callback");
+    }
+
+    @Test
+    void aSignInStartedOnTheOldHostComesBackToTheOldHost() {
+        // A phone build from before the move still starts sign-in there, and its state cookie
+        // lives there. Sent to the new host, the callback would arrive without it and refuse.
+        var service = service(Map.of("google", configured()), List.of("https://old.example/"));
+
+        assertThat(service.redirectUri("google", "old.example"))
+                .isEqualTo("https://old.example/api/v1/auth/oauth/google/callback");
+    }
+
+    @Test
+    void theHostMatchesWhateverItsCaseAndPort() {
+        // The configured origin is used as written, never the request's own scheme or port:
+        // TLS ends at the ingress, so this server sees plain http on an internal port.
+        var service = service(Map.of("google", configured()), List.of("https://old.example"));
+
+        assertThat(service.redirectUri("google", "OLD.Example:8080"))
+                .isEqualTo("https://old.example/api/v1/auth/oauth/google/callback");
+        assertThat(service.redirectUri("google", "Music.Example:443"))
+                .isEqualTo("https://music.example/api/v1/auth/oauth/google/callback");
+    }
+
+    @Test
+    void theAuthorizeUrlSendsTheProviderBackToTheHostTheFlowStartedOn() {
+        when(stateRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+
+        String url = service(Map.of("google", configured()), List.of("https://old.example"))
+                .authorizeUrl("google", OAuthClient.MOBILE, "old.example")
+                .url();
+
+        assertThat(url).contains("redirect_uri=https://old.example/api/v1/auth/oauth/google/callback");
+    }
+
+    @Test
+    void aSpoofedHostNeverReachesTheRedirectUri() {
+        // The host header is whatever the caller wrote. Followed blindly, it would send the
+        // provider's code to a server of the caller's choosing.
+        when(stateRepository.save(any())).thenAnswer(call -> call.getArgument(0));
+        var service = service(Map.of("google", configured()), List.of("https://old.example"));
+
+        String url = service.authorizeUrl("google", OAuthClient.WEB, "attacker.example").url();
+
+        assertThat(url).doesNotContain("attacker.example");
+        assertThat(url).contains("redirect_uri=https://music.example/api/v1/auth/oauth/google/callback");
+        assertThat(service.redirectUri("google", "old.example.attacker.example"))
+                .doesNotContain("attacker.example");
     }
 
     @Test
@@ -182,7 +246,7 @@ class OAuthServiceTest {
         when(stateRepository.save(any())).thenAnswer(call -> call.getArgument(0));
 
         OAuthService.Authorization authorization =
-                service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB);
+                service(Map.of("google", configured())).authorizeUrl("google", OAuthClient.WEB, null);
 
         // Never the state itself, and never in the URL: the point is that it travels by a
         // route the provider's redirect does not.
