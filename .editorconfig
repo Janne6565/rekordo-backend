@@ -1,0 +1,35 @@
+# Shared formatting rules. IntelliJ reads this natively (no plugin needed) and the
+# ij_* keys below pin the handful of Java settings that otherwise follow whatever the
+# IDE was last set to — which is how a one-line change arrives as a reformatted file.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.java]
+indent_size = 4
+# Method chains and wrapped argument lists sit two steps in, not one. This is the rule
+# that reindented three untouched beans in MetadataClientConfig.
+ij_continuation_indent_size = 8
+max_line_length = 120
+# Never collapse to `import java.util.*`: the codebase imports every type by name.
+ij_java_class_count_to_use_import_on_demand = 999
+ij_java_names_count_to_use_import_on_demand = 999
+# Everything alphabetical, then java.**, then static — the order already in the tree.
+ij_java_imports_layout = *,|,java.**,|,$*
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.xml]
+indent_size = 4
+
+[*.sql]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false

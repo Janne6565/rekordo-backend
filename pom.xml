@@ -20,6 +20,7 @@
 		     artifact can always name itself. A local `mvn package` stays "dev". -->
 		<mc.release>dev</mc.release>
 		<springdoc.version>3.0.3</springdoc.version>
+		<spotless.version>3.10.2</spotless.version>
 		<jjwt.version>0.12.6</jjwt.version>
 		<bucket4j.version>8.14.0</bucket4j.version>
 		<minio.version>8.5.17</minio.version>
@@ -237,6 +238,31 @@
 								</path>
 							</annotationProcessorPaths>
 						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Formatting hygiene only: imports, whitespace, line endings. Deliberately not a
+			     full Java formatter, which would reflow every file in the repo and bury real
+			     changes. IntelliJ handles layout from .editorconfig; this is the CI backstop. -->
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>${spotless.version}</version>
+				<configuration>
+					<java>
+						<removeUnusedImports />
+						<importOrder>
+							<order>,java,\#</order>
+						</importOrder>
+						<trimTrailingWhitespace />
+						<endWithNewline />
+					</java>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>check</goal>
+						</goals>
 					</execution>
 				</executions>
 			</plugin>
