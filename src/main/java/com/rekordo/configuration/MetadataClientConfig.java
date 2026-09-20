@@ -29,7 +29,8 @@ import java.time.Duration;
     MusicBrainzProperties.class,
     DiscogsProperties.class,
     JwtProperties.class,
-    OAuthProperties.class
+    OAuthProperties.class,
+    AppleMusicProperties.class
 })
 public class MetadataClientConfig {
 
