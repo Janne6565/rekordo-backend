@@ -27,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -164,6 +165,37 @@ class SyncServicePhotoBytesTest {
             assertThat(stored.contentType()).isEqualTo("image/png");
             assertThat(stored.byteSize()).isEqualTo(4096L);
         });
+    }
+
+    @Test
+    void aPushedByteSizeIsNotTakenAtItsWord() {
+        // The size is what the 20 MB allowance is summed from, and only the upload endpoint
+        // has ever measured it. Zero until it does.
+        SyncPullDto result = push(photo(USER + "/" + PHOTO, "image/jpeg", null));
+
+        assertThat(result.photos()).singleElement().satisfies(stored -> assertThat(stored.byteSize())
+                .isZero());
+    }
+
+    @Test
+    void aNegativeByteSizeCannotBeStored() {
+        // The bypass this guards: sum(byte_size) going negative makes StorageUsageService
+        // read the account as owing nothing, and the ceiling stops applying to it entirely.
+        SyncPullDto result = push(new SyncPhotoDto(
+                PHOTO.toString(),
+                UUID.randomUUID().toString(),
+                null,
+                USER + "/" + PHOTO,
+                "image/jpeg",
+                -2_000_000_000L,
+                0,
+                1L,
+                null,
+                Map.of()));
+
+        assertThat(result.photos()).singleElement().satisfies(stored -> assertThat(stored.byteSize())
+                .isZero());
+        verify(photoRepository).save(argThat(saved -> saved.getByteSize() >= 0L));
     }
 
     @Test
