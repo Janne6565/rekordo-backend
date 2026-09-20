@@ -2,7 +2,6 @@ package com.rekordo.services.metadata;
 
 import org.springframework.stereotype.Component;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -10,6 +9,7 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import javax.imageio.ImageIO;
 
 /**
  * Samples a cover image down to two colours: the dominant tone that decides the chrome,

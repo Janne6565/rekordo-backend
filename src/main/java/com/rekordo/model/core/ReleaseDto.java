@@ -1,6 +1,5 @@
 package com.rekordo.model.core;
 
-import java.util.UUID;
 
 /**
  * One specific edition of an album — the unit a user actually owns a copy of.

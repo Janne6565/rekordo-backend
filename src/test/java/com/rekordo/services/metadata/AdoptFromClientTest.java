@@ -4,7 +4,6 @@ import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.DiscogsClient;
 import com.rekordo.client.MusicBrainzClient;
 import com.rekordo.entity.ReleaseEntity;
-import com.rekordo.entity.ReleaseGroupEntity;
 import com.rekordo.model.core.Format;
 import com.rekordo.model.core.ReleaseDto;
 import com.rekordo.repository.ArtistImageRepository;

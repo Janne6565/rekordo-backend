@@ -1,8 +1,8 @@
 package com.rekordo.services.social;
 
 import com.rekordo.entity.CopyEntity;
-import com.rekordo.entity.PhotoEntity;
 import com.rekordo.entity.FriendshipEntity;
+import com.rekordo.entity.PhotoEntity;
 import com.rekordo.entity.ReleaseEntity;
 import com.rekordo.entity.UserEntity;
 import com.rekordo.entity.WishlistItemEntity;
@@ -11,7 +11,6 @@ import com.rekordo.model.core.FriendRequestDto;
 import com.rekordo.model.core.FriendsOverviewDto;
 import com.rekordo.model.core.ProfileDto;
 import com.rekordo.model.core.ProfileSummaryDto;
-import com.rekordo.model.core.RelationshipDto;
 import com.rekordo.model.core.ReleaseDto;
 import com.rekordo.model.core.SharedCollectionDto;
 import com.rekordo.model.core.SharedCopyDto;

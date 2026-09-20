@@ -9,13 +9,13 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
+import javax.crypto.SecretKey;
 
 /** Mints and validates the app's own tokens. The service is its own identity provider. */
 @Service

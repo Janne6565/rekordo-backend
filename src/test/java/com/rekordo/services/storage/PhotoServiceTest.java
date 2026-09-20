@@ -1,6 +1,7 @@
 package com.rekordo.services.storage;
 
 import com.rekordo.configuration.StorageProperties;
+import com.rekordo.entity.CopyEntity;
 import com.rekordo.entity.PhotoEntity;
 import com.rekordo.model.core.PhotoUploadDto;
 import com.rekordo.model.exception.PhotoNotFoundException;
@@ -8,7 +9,6 @@ import com.rekordo.model.exception.PhotoOwnerRequiredException;
 import com.rekordo.model.exception.PhotoTooLargeException;
 import com.rekordo.model.exception.StorageQuotaExceededException;
 import com.rekordo.model.exception.UnsupportedPhotoTypeException;
-import com.rekordo.entity.CopyEntity;
 import com.rekordo.repository.CopyRepository;
 import com.rekordo.repository.PhotoRepository;
 import com.rekordo.services.social.VisibilityService;

@@ -1,6 +1,5 @@
 package com.rekordo.model.core;
 
-import java.util.UUID;
 
 /**
  * A release group — the album, above the individual pressings of it.

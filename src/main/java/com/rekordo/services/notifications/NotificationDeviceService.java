@@ -3,13 +3,12 @@ package com.rekordo.services.notifications;
 import com.rekordo.entity.NotificationDeviceEntity;
 import com.rekordo.entity.UserEntity;
 import com.rekordo.model.core.NotificationDeviceDto;
+import com.rekordo.repository.NotificationDeviceRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import com.rekordo.repository.NotificationDeviceRepository;
 
 import java.time.Instant;
 import java.util.List;

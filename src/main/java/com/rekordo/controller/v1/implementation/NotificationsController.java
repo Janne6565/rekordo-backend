@@ -8,12 +8,12 @@ import com.rekordo.model.core.NotificationPreferencesDto;
 import com.rekordo.security.CurrentUser;
 import com.rekordo.services.notifications.NotificationDeviceService;
 import com.rekordo.services.notifications.NotificationPreferenceService;
-
-import java.util.List;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor

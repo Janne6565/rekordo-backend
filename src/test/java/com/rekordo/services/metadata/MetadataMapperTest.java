@@ -5,7 +5,6 @@ import com.rekordo.entity.ReleaseEntity;
 import com.rekordo.model.core.AlbumDto;
 import com.rekordo.model.core.ArtistDto;
 import com.rekordo.model.core.Format;
-import com.rekordo.model.core.Format;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
