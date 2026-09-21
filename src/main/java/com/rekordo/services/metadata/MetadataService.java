@@ -3,6 +3,7 @@ package com.rekordo.services.metadata;
 import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.CoverProbe;
 import com.rekordo.client.applemusic.AppleMusicClient;
+import com.rekordo.client.applemusic.AppleMusicResponses;
 import com.rekordo.client.discogs.DiscogsClient;
 import com.rekordo.client.discogs.DiscogsResponses;
 import com.rekordo.client.musicbrainz.MusicBrainzClient;
@@ -327,6 +328,17 @@ public class MetadataService {
             if (!pressings.isEmpty()) {
                 return pressings;
             }
+        }
+
+        // An Apple album is never in the mirror -- the record search writes nothing down --
+        // so its artist and title are fetched back to cross the same bridge. One extra call,
+        // paid once per album and then cached, and only on the tap that asks for pressings.
+        if (ref.source() == ReleaseSource.APPLE_MUSIC) {
+            return appleMusicClient.album(ref.id())
+                    .map(AppleMusicResponses.Album::attributes)
+                    .map(attributes -> fromDiscogs(() -> discogsClient.pressingsOf(
+                            attributes.artistName(), attributes.name(), limit)))
+                    .orElseGet(List::of);
         }
 
         // Nothing on Discogs, or an album this server has never mirrored. Only a

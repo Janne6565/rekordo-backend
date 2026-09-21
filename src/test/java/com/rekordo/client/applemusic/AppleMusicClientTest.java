@@ -4,6 +4,7 @@ import com.rekordo.configuration.AppleMusicProperties;
 import com.rekordo.model.exception.UpstreamUnavailableException;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
@@ -138,6 +140,45 @@ class AppleMusicClientTest {
         AppleMusicClient client = client("");
 
         assertThat(client.searchAlbums("x", 25)).isEmpty();
+
+        server.verify();
+    }
+
+    @Test
+    void readsOneAlbumById() {
+        // A different envelope from search: Apple answers `data`, not `results.albums.data`.
+        AppleMusicClient client = client();
+        server.expect(requestTo(Matchers.startsWith(BASE + "/v1/catalog/de/albums/1440783617")))
+                .andRespond(withSuccess("""
+                    {"data":[{"id":"1440783617","attributes":{
+                      "name":"Nevermind","artistName":"Nirvana","trackCount":13,
+                      "artwork":{"url":"https://mz/{w}x{h}bb.jpg","width":1,"height":1},
+                      "url":"https://music.apple.com/de/album/1440783617"}}]}
+                    """, MediaType.APPLICATION_JSON));
+
+        var album = client.album("1440783617");
+
+        assertThat(album).isPresent();
+        assertThat(album.get().attributes().artistName()).isEqualTo("Nirvana");
+        assertThat(album.get().attributes().name()).isEqualTo("Nevermind");
+    }
+
+    @Test
+    void hasNoAlbumForAnIdAppleDoesNotKnow() {
+        // An answer about the album, not a failure of the request: the caller falls back to
+        // offering no pressings rather than showing the record as broken.
+        AppleMusicClient client = client();
+        server.expect(requestTo(Matchers.startsWith(BASE)))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(client.album("nope")).isEmpty();
+    }
+
+    @Test
+    void asksAppleForNothingWithoutAKeyWhenFetchingOneAlbum() {
+        AppleMusicClient client = client("");
+
+        assertThat(client.album("1440783617")).isEmpty();
 
         server.verify();
     }

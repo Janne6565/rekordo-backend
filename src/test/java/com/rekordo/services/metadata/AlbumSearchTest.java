@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -142,6 +143,32 @@ class AlbumSearchTest {
                 .thenThrow(new UpstreamUnavailableException("Discogs", new RuntimeException()));
 
         assertThat(service.searchAlbums("qwertyuiop", 25)).isEmpty();
+    }
+
+    @Test
+    void bridgesAnAppleAlbumToDiscogsPressingsByArtistAndTitle() {
+        // The two catalogues share no identifiers but agree on what a record is called, and
+        // an Apple album is never in the mirror -- the record search writes nothing down --
+        // so artist and title have to be fetched back before Discogs can be asked at all.
+        when(releaseGroupRepository.findByExternalId(anyString())).thenReturn(Optional.empty());
+        when(appleMusicClient.album("1440783617"))
+                .thenReturn(Optional.of(appleAlbum("1440783617", "Nevermind", "Nirvana")));
+        when(discogsClient.pressingsOf(anyString(), anyString(), anyInt())).thenReturn(List.of());
+
+        service.releasesInGroup("applemusic:1440783617", 25);
+
+        verify(discogsClient).pressingsOf("Nirvana", "Nevermind", 25);
+    }
+
+    @Test
+    void offersNoPressingsForAnAppleAlbumAppleNoLongerHas() {
+        // Empty rather than an error: the record still goes on the shelf as "any pressing",
+        // which is the answer most people give anyway.
+        when(releaseGroupRepository.findByExternalId(anyString())).thenReturn(Optional.empty());
+        when(appleMusicClient.album(anyString())).thenReturn(Optional.empty());
+
+        assertThat(service.releasesInGroup("applemusic:404", 25)).isEmpty();
+        verify(discogsClient, never()).pressingsOf(anyString(), anyString(), anyInt());
     }
 
     private static AppleMusicResponses.Album appleAlbum(String id, String name, String artist) {

@@ -3,10 +3,12 @@ package com.rekordo.client.applemusic;
 import com.rekordo.configuration.AppleMusicProperties;
 import com.rekordo.model.exception.UpstreamUnavailableException;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Talks to the Apple Music catalogue, which is where the search box looks.
@@ -63,6 +65,39 @@ public class AppleMusicClient {
                             .build(properties.storefront()))
                     .retrieve()
                     .body(AppleMusicResponses.SearchResponse.class));
+        } catch (RestClientException e) {
+            throw new UpstreamUnavailableException("Apple Music", e);
+        }
+    }
+
+    /**
+     * One album by its Apple id, for its artist and title.
+     *
+     * The bridge to Discogs is artist and title, because the two catalogues share no
+     * identifiers but agree on what a record is called. A mirrored album can be read
+     * straight out of the local tables; an Apple one never is, because this search writes
+     * nothing down -- so the two fields have to be fetched back when somebody asks which
+     * pressings the record has.
+     *
+     * <p>Empty for an id Apple does not have, which is an answer about the album rather
+     * than a failure of the request.
+     */
+    public Optional<AppleMusicResponses.Album> album(String id) {
+        if (!properties.configured()) {
+            return Optional.empty();
+        }
+        try {
+            AppleMusicResponses.AlbumsResponse response = restClient
+                    .get()
+                    .uri(uri -> uri.path("/v1/catalog/{storefront}/albums/{id}")
+                            .build(properties.storefront(), id))
+                    .retrieve()
+                    .body(AppleMusicResponses.AlbumsResponse.class);
+            return response == null || response.data() == null || response.data().isEmpty()
+                    ? Optional.empty()
+                    : Optional.ofNullable(response.data().getFirst());
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
         } catch (RestClientException e) {
             throw new UpstreamUnavailableException("Apple Music", e);
         }

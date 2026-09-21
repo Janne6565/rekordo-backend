@@ -10,6 +10,10 @@ public final class AppleMusicResponses {
     public record SearchResponse(Results results) {
     }
 
+    /** One album fetched by id. Apple answers with a list of one rather than the album. */
+    public record AlbumsResponse(List<Album> data) {
+    }
+
     public record Results(AlbumData albums) {
     }
 
