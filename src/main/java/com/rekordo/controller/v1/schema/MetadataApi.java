@@ -1,6 +1,7 @@
 package com.rekordo.controller.v1.schema;
 
 import com.rekordo.model.core.AlbumCoverDto;
+import com.rekordo.model.core.AlbumDto;
 import com.rekordo.model.core.ArtistDto;
 import com.rekordo.model.core.ArtistImageDto;
 import com.rekordo.model.core.DiscographyDto;
@@ -41,6 +42,28 @@ public interface MetadataApi {
     @ApiResponse(responseCode = "429", description = "Per-IP rate limit exceeded")
     @ApiResponse(responseCode = "502", description = "MusicBrainz is unreachable")
     ResponseEntity<List<ReleaseDto>> search(
+            @RequestParam("q") @NotBlank @Size(max = 200) String query,
+            @RequestParam(value = "limit", defaultValue = "25") @Min(1) @Max(50) int limit);
+
+    @GetMapping("/albums/search")
+    @Operation(
+            summary = "Search albums by artist or title",
+            description = "One row per record, which is what the add flow should list. "
+                    + "/search answers with pressings, and a record with ten of them fills "
+                    + "the screen ten times over with rows nobody can tell apart until they "
+                    + "have already chosen one. Answered from Apple Music, whose catalogue "
+                    + "has no pressings to multiply by, and from Discogs grouped by master "
+                    + "when Apple has nothing or this deployment carries no key -- the shape "
+                    + "is the same either way and a client cannot tell which replied.\n\n"
+                    + "`coverArtTemplate` is Apple's resizable artwork, carrying literal "
+                    + "`{w}x{h}` placeholders a client substitutes for the size it needs; it "
+                    + "is null for a Discogs answer, where `coverArtUrl` is the only image "
+                    + "there is. Nothing in this response is mirrored, so an id here is not "
+                    + "yet something the mirror can be asked about.")
+    @ApiResponse(responseCode = "200", description = "Matching albums, possibly empty")
+    @ApiResponse(responseCode = "429", description = "Per-IP rate limit exceeded")
+    @ApiResponse(responseCode = "502", description = "Neither catalogue is reachable")
+    ResponseEntity<List<AlbumDto>> searchAlbums(
             @RequestParam("q") @NotBlank @Size(max = 200) String query,
             @RequestParam(value = "limit", defaultValue = "25") @Min(1) @Max(50) int limit);
 

@@ -33,7 +33,8 @@ class CacheConfigTest {
                 CacheConfig.ARTIST_DISCOGRAPHY,
                 CacheConfig.ALBUM_PRESSINGS,
                 CacheConfig.BARCODE_LOOKUP,
-                CacheConfig.ARTIST_SEARCH);
+                CacheConfig.ARTIST_SEARCH,
+                CacheConfig.ALBUM_SEARCH);
         assertThat(names).allSatisfy(name -> assertThat(manager.getCache(name)).isNotNull());
         assertThat(names).doesNotHaveDuplicates();
     }
@@ -46,7 +47,8 @@ class CacheConfigTest {
                 CacheConfig.ARTIST_DISCOGRAPHY,
                 CacheConfig.ALBUM_PRESSINGS,
                 CacheConfig.BARCODE_LOOKUP,
-                CacheConfig.ARTIST_SEARCH);
+                CacheConfig.ARTIST_SEARCH,
+                CacheConfig.ALBUM_SEARCH);
 
         List<String> annotated = Arrays.stream(MetadataService.class.getDeclaredMethods())
                 .map(method -> method.getAnnotation(Cacheable.class))
@@ -56,8 +58,8 @@ class CacheConfigTest {
                 .toList();
 
         assertThat(annotated)
-                .as("the service is expected to cache every paced upstream question")
-                .hasSize(5)
+                .as("the service is expected to cache every upstream question")
+                .hasSize(6)
                 .allSatisfy(name -> assertThat(configured).contains(name));
     }
 
@@ -69,6 +71,9 @@ class CacheConfigTest {
         assertThat(cacheNameOf("albumsOfArtist")).isEqualTo(CacheConfig.ARTIST_DISCOGRAPHY);
         assertThat(cacheNameOf("releasesInGroup")).isEqualTo(CacheConfig.ALBUM_PRESSINGS);
         assertThat(cacheNameOf("searchArtists")).isEqualTo(CacheConfig.ARTIST_SEARCH);
+        // Cached although Apple is not paced: this is the one answer nothing writes down,
+        // so the entry is the only copy of it between requests.
+        assertThat(cacheNameOf("searchAlbums")).isEqualTo(CacheConfig.ALBUM_SEARCH);
     }
 
     private static String cacheNameOf(String methodName) {

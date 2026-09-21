@@ -2,6 +2,7 @@ package com.rekordo.services.metadata;
 
 import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.CoverProbe;
+import com.rekordo.client.applemusic.AppleMusicClient;
 import com.rekordo.client.discogs.DiscogsClient;
 import com.rekordo.client.discogs.DiscogsResponses;
 import com.rekordo.client.musicbrainz.MusicBrainzClient;
@@ -38,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -65,6 +67,7 @@ public class MetadataService {
 
     private final MusicBrainzClient musicBrainzClient;
     private final DiscogsClient discogsClient;
+    private final AppleMusicClient appleMusicClient;
     private final CoverArtClient coverArtClient;
     private final DominantColorExtractor colorExtractor;
     private final ReleaseRepository releaseRepository;
@@ -92,6 +95,79 @@ public class MetadataService {
                 .map(this::upsert)
                 .flatMap(Optional::stream)
                 .toList();
+    }
+
+    /**
+     * Albums matching a query -- one row per record, not per pressing.
+     *
+     * <p>The search the add flow shows. Asking Discogs for releases returns ten rows for a
+     * record with ten pressings, all but one of them wrong for anybody who has not yet said
+     * which they own; Apple's catalogue has no pressings to multiply by, so a search there
+     * is already the list a person means.
+     *
+     * <p><strong>Nothing here is written down.</strong> Unlike {@link #search}, which upserts
+     * every result into the mirror inside a transaction, this holds no row: an Apple album is
+     * an answer to a question, not a record this app keeps. The Caffeine entry is the only
+     * copy between requests, which is also why it is cached separately.
+     *
+     * <p>Discogs answers when Apple has nothing, is unreachable, or has no key in this
+     * deployment -- grouped into albums rather than listed as pressings, so the shape of the
+     * answer is the same either way and the screen above it cannot tell which replied.
+     */
+    @Cacheable(cacheNames = CacheConfig.ALBUM_SEARCH, key = "#query + '|' + #limit")
+    public List<AlbumDto> searchAlbums(String query, int limit) {
+        List<AlbumDto> fromApple = fromAppleMusic(query, limit);
+        if (!fromApple.isEmpty()) {
+            return fromApple;
+        }
+        log.debug("Apple Music had nothing for '{}'; falling back to Discogs", query);
+        return albumsFromDiscogs(query, limit);
+    }
+
+    private List<AlbumDto> fromAppleMusic(String query, int limit) {
+        try {
+            return appleMusicClient.searchAlbums(query, limit).stream()
+                    .map(AppleMusicMapper::toAlbumDto)
+                    .filter(Objects::nonNull)
+                    .toList();
+        } catch (UpstreamUnavailableException e) {
+            log.warn("Apple Music is unreachable, falling back to Discogs: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Discogs' pressings, collapsed to the records they are pressings of.
+     *
+     * <p>Grouped by {@link DiscogsMapper#albumRefOf}, which every search result already
+     * answers -- the ten rows that made this screen unreadable share one master. A release
+     * belonging to no master keys on itself there rather than returning nothing, so a
+     * standalone pressing stays in the list instead of vanishing from it.
+     */
+    private List<AlbumDto> albumsFromDiscogs(String query, int limit) {
+        Map<String, AlbumDto> byAlbum = new LinkedHashMap<>();
+        for (DiscogsResponses.SearchResult result : discogsSearch(query, limit)) {
+            String id = DiscogsMapper.albumRefOf(result);
+            byAlbum.putIfAbsent(id, new AlbumDto(
+                    id,
+                    DiscogsMapper.titleOf(result.title()),
+                    DiscogsMapper.artistOf(result.title()),
+                    result.year(),
+                    null,
+                    DiscogsMapper.coverUrlOf(result),
+                    // Discogs serves one fixed image per release; there is nothing to resize.
+                    null));
+        }
+        return List.copyOf(byAlbum.values());
+    }
+
+    private List<DiscogsResponses.SearchResult> discogsSearch(String query, int limit) {
+        try {
+            return discogsClient.search(query, limit);
+        } catch (UpstreamUnavailableException e) {
+            log.warn("Discogs is unreachable for the album search: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**

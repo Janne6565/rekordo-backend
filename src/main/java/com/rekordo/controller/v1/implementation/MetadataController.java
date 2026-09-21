@@ -2,6 +2,7 @@ package com.rekordo.controller.v1.implementation;
 
 import com.rekordo.controller.v1.schema.MetadataApi;
 import com.rekordo.model.core.AlbumCoverDto;
+import com.rekordo.model.core.AlbumDto;
 import com.rekordo.model.core.ArtistDto;
 import com.rekordo.model.core.ArtistImageDto;
 import com.rekordo.model.core.DiscographyDto;
@@ -28,6 +29,11 @@ public class MetadataController implements MetadataApi {
     @Override
     public ResponseEntity<List<ReleaseDto>> search(String query, int limit) {
         return ResponseEntity.ok(metadataService.search(query.trim(), limit));
+    }
+
+    @Override
+    public ResponseEntity<List<AlbumDto>> searchAlbums(String query, int limit) {
+        return ResponseEntity.ok(metadataService.searchAlbums(query.trim(), limit));
     }
 
     @Override

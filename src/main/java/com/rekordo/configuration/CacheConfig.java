@@ -56,6 +56,16 @@ public class CacheConfig {
      */
     public static final String BARCODE_LOOKUP = "barcodeLookup";
 
+    /**
+     * Query to albums, for the album-first search.
+     *
+     * <p>Separate from {@link #METADATA_SEARCH} because it answers a different question --
+     * records rather than pressings -- and because nothing behind it is written down. The
+     * pressing search mirrors what it finds; this one holds the only copy of an answer
+     * between requests, so an entry is worth more here than there.
+     */
+    public static final String ALBUM_SEARCH = "albumSearch";
+
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager();
@@ -67,6 +77,7 @@ public class CacheConfig {
         manager.registerCustomCache(ALBUM_PRESSINGS, spec(5_000, Duration.ofHours(24)));
         manager.registerCustomCache(BARCODE_LOOKUP, spec(10_000, Duration.ofHours(24)));
         manager.registerCustomCache(ARTIST_SEARCH, spec(2_000, Duration.ofHours(6)));
+        manager.registerCustomCache(ALBUM_SEARCH, spec(2_000, Duration.ofHours(6)));
         return manager;
     }
 
