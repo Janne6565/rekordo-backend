@@ -1,5 +1,6 @@
 package com.rekordo.configuration;
 
+import com.rekordo.client.applemusic.AppleMusicToken;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -80,6 +81,26 @@ public class MetadataClientConfig {
             builder = builder.defaultHeader("Authorization", "Discogs token=" + properties.token());
         }
         return builder.build();
+    }
+
+
+    /**
+     * Apple Music, whose credential is the only one here that expires.
+     *
+     * <p>The token is resolved per request rather than folded into a default header, as
+     * the Discogs one is. Apple caps a developer token at 180 days, so it is re-minted
+     * while the process runs — and a header captured once at bean creation would pin the
+     * first token for the life of the pod, which is the very failure {@code
+     * AppleMusicToken} exists to prevent.
+     */
+    @Bean
+    public RestClient appleMusicRestClient(
+            ObservationRegistry observations, AppleMusicProperties properties, AppleMusicToken token) {
+        return observed(observations)
+                .baseUrl(properties.baseUrl())
+                .requestInitializer(request ->
+                        token.value().ifPresent(value -> request.getHeaders().setBearerAuth(value)))
+                .build();
     }
 
     @Bean
