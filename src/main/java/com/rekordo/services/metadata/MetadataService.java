@@ -2,10 +2,10 @@ package com.rekordo.services.metadata;
 
 import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.CoverProbe;
-import com.rekordo.client.DiscogsClient;
-import com.rekordo.client.DiscogsResponses;
-import com.rekordo.client.MusicBrainzClient;
-import com.rekordo.client.MusicBrainzResponses;
+import com.rekordo.client.discogs.DiscogsClient;
+import com.rekordo.client.discogs.DiscogsResponses;
+import com.rekordo.client.musicbrainz.MusicBrainzClient;
+import com.rekordo.client.musicbrainz.MusicBrainzResponses;
 import com.rekordo.configuration.CacheConfig;
 import com.rekordo.entity.ArtistImageEntity;
 import com.rekordo.entity.ReleaseEntity;

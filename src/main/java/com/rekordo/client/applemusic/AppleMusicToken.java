@@ -1,4 +1,4 @@
-package com.rekordo.client;
+package com.rekordo.client.applemusic;
 
 import com.rekordo.configuration.AppleMusicProperties;
 import io.jsonwebtoken.Jwts;

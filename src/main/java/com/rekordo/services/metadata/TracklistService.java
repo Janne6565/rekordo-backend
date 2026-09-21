@@ -1,6 +1,7 @@
 package com.rekordo.services.metadata;
 
-import com.rekordo.client.MusicBrainzClient;
+import com.rekordo.client.musicbrainz.MusicBrainzClient;
+import com.rekordo.client.musicbrainz.MusicBrainzResponses;
 import com.rekordo.entity.ReleaseEntity;
 import com.rekordo.model.core.ExternalRef;
 import com.rekordo.model.core.ReleaseSource;
@@ -95,7 +96,7 @@ public class TracklistService {
      * lookup and no sheet after that does.
      */
     private void fetchTracks(ReleaseEntity entity, ExternalRef ref) {
-        Optional<com.rekordo.client.MusicBrainzResponses.Release> release =
+        Optional<MusicBrainzResponses.Release> release =
                 musicBrainzClient.lookupRelease(ref.id());
         if (release.isPresent() && TrackMirror.carriesTracks(release.get())) {
             trackMirror.store(entity, release.get());

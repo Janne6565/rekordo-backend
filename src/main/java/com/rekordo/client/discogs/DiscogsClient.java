@@ -1,5 +1,7 @@
-package com.rekordo.client;
+package com.rekordo.client.discogs;
 
+import com.rekordo.client.CoverProbe;
+import com.rekordo.client.UpstreamPacer;
 import com.rekordo.configuration.DiscogsProperties;
 import com.rekordo.model.exception.UpstreamUnavailableException;
 import org.slf4j.Logger;

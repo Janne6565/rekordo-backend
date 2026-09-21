@@ -1,6 +1,6 @@
 package com.rekordo.services.metadata;
 
-import com.rekordo.client.MusicBrainzResponses;
+import com.rekordo.client.musicbrainz.MusicBrainzResponses;
 import com.rekordo.entity.ReleaseEntity;
 import com.rekordo.model.core.AlbumDto;
 import com.rekordo.model.core.ArtistDto;

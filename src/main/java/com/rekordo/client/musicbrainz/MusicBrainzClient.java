@@ -1,5 +1,6 @@
-package com.rekordo.client;
+package com.rekordo.client.musicbrainz;
 
+import com.rekordo.client.UpstreamPacer;
 import com.rekordo.configuration.MusicBrainzProperties;
 import com.rekordo.model.exception.UpstreamUnavailableException;
 import org.slf4j.Logger;

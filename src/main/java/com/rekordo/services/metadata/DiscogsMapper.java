@@ -1,6 +1,6 @@
 package com.rekordo.services.metadata;
 
-import com.rekordo.client.DiscogsResponses;
+import com.rekordo.client.discogs.DiscogsResponses;
 import com.rekordo.model.core.ExternalRef;
 import com.rekordo.model.core.Format;
 

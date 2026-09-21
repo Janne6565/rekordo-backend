@@ -1,9 +1,9 @@
 package com.rekordo.services.metadata;
 
 import com.rekordo.client.CoverArtClient;
-import com.rekordo.client.DiscogsClient;
-import com.rekordo.client.DiscogsResponses;
-import com.rekordo.client.MusicBrainzClient;
+import com.rekordo.client.discogs.DiscogsClient;
+import com.rekordo.client.discogs.DiscogsResponses;
+import com.rekordo.client.musicbrainz.MusicBrainzClient;
 import com.rekordo.entity.ReleaseEntity;
 import com.rekordo.entity.ReleaseGroupEntity;
 import com.rekordo.model.core.AlbumCoverDto;

@@ -1,4 +1,4 @@
-package com.rekordo.client;
+package com.rekordo.client.discogs;
 
 import org.junit.jupiter.api.Test;
 
@@ -8,37 +8,18 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The two steps between "a MusicBrainz artist" and "a picture of them".
+ * The second step between "a MusicBrainz artist" and "a picture of them": choosing which
+ * of Discogs' images is the portrait.
  *
- * <p>Both are places a wrong answer looks like a right one: a misparsed URL resolves to a
- * real Discogs artist who is somebody else, and the wrong image out of a set puts a record
- * sleeve where a face should be. Neither would throw.
+ * <p>A place where a wrong answer looks like a right one. The wrong image out of a set
+ * puts a record sleeve where a face should be, and nothing throws. The first step is
+ * {@code com.rekordo.client.musicbrainz.DiscogsRelationTest}; the two are apart only
+ * because each reaches a package-private seam in its own client.
  */
 class ArtistPortraitTest {
 
     private static DiscogsResponses.ArtistImage image(String type, String uri, String uri150) {
         return new DiscogsResponses.ArtistImage(type, uri, uri150);
-    }
-
-    @Test
-    void readsTheArtistIdOffADiscogsRelation() {
-        assertThat(MusicBrainzClient.trailingId("https://www.discogs.com/artist/1055923"))
-                .contains(1055923L);
-    }
-
-    @Test
-    void readsTheArtistIdWhenTheUrlCarriesASlug() {
-        // Both shapes are in MusicBrainz; the slug is decoration and the number is the id.
-        assertThat(MusicBrainzClient.trailingId("https://www.discogs.com/artist/1055923-Daughter"))
-                .contains(1055923L);
-    }
-
-    @Test
-    void refusesADiscogsUrlThatIsNotAnArtist() {
-        // A master or label URL would parse to a number that means something else entirely.
-        assertThat(MusicBrainzClient.trailingId("https://www.discogs.com/master/12345")).isEmpty();
-        assertThat(MusicBrainzClient.trailingId("https://www.discogs.com/label/678")).isEmpty();
-        assertThat(MusicBrainzClient.trailingId("https://en.wikipedia.org/wiki/Daughter")).isEmpty();
     }
 
     @Test
