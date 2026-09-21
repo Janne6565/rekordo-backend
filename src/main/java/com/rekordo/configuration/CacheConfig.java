@@ -71,7 +71,8 @@ public class CacheConfig {
         CaffeineCacheManager manager = new CaffeineCacheManager();
         manager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(2_000)
-                .expireAfterWrite(Duration.ofHours(6)));
+                .expireAfterWrite(Duration.ofHours(6))
+                .recordStats());
         manager.registerCustomCache(METADATA_SEARCH, spec(2_000, Duration.ofHours(6)));
         manager.registerCustomCache(ARTIST_DISCOGRAPHY, spec(2_000, Duration.ofHours(24)));
         manager.registerCustomCache(ALBUM_PRESSINGS, spec(5_000, Duration.ofHours(24)));
@@ -83,6 +84,14 @@ public class CacheConfig {
 
     private static com.github.benmanes.caffeine.cache.Cache<Object, Object> spec(
             int maximumSize, Duration ttl) {
-        return Caffeine.newBuilder().maximumSize(maximumSize).expireAfterWrite(ttl).build();
+        // recordStats because Micrometer reads it: without it only cache.size is exported,
+        // and the hit ratio is the number that says whether a cache is earning its entry --
+        // the pacer measurements that justified artistSearch were taken blind for want of it.
+        // Caffeine keeps the counters in padded longs, so the cost is memory, not latency.
+        return Caffeine.newBuilder()
+                .maximumSize(maximumSize)
+                .expireAfterWrite(ttl)
+                .recordStats()
+                .build();
     }
 }
