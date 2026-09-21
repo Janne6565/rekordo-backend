@@ -3,7 +3,14 @@ package com.rekordo.model.core;
 /** The catalogues this app reads. */
 public enum ReleaseSource {
     MUSICBRAINZ("musicbrainz"),
-    DISCOGS("discogs");
+    DISCOGS("discogs"),
+    /**
+     * Apple Music, which the search box reads and nothing else does.
+     *
+     * <p>It has no pressings at all -- one digital album per record, no country variants
+     * or label editions -- so an id from here names an album and never a copy of one.
+     */
+    APPLE_MUSIC("applemusic");
 
     private final String prefix;
 

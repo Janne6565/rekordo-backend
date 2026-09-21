@@ -153,7 +153,9 @@ public final class MetadataMapper {
                 artist,
                 year(group.firstReleaseDate()),
                 group.primaryType(),
-                coverArtUrl);
+                coverArtUrl,
+                // The Cover Art Archive serves one fixed image; there is no template.
+                null);
     }
 
     public static ReleaseDto toDto(ReleaseEntity entity, String albumId) {

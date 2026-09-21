@@ -38,6 +38,10 @@ public record ExternalRef(ReleaseSource source, String id) {
         return new ExternalRef(ReleaseSource.DISCOGS, id);
     }
 
+    public static ExternalRef appleMusic(String id) {
+        return new ExternalRef(ReleaseSource.APPLE_MUSIC, id);
+    }
+
     /**
      * Reads a stored reference back.
      *

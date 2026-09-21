@@ -13,10 +13,19 @@ package com.rekordo.model.core;
  * discography that did not separate them would bury the four records anyone is looking for.
  */
 public record AlbumDto(
-        /** Source-qualified: "musicbrainz:<uuid>" or "discogs:<int>". */
+        /** Source-qualified: "musicbrainz:<uuid>", "discogs:<int>" or "applemusic:<int>". */
         String albumId,
         String title,
         String artistName,
         Integer year,
         String primaryType,
-        String coverArtUrl) {}
+        String coverArtUrl,
+        /**
+         * The artwork as a resizable template, or null from a catalogue that has none.
+         *
+         * <p>Apple serves one asset at any size through a {@code {w}x{h}} placeholder, so a
+         * shelf grid on a phone can ask for 8 KB where a detail sheet asks for 600. The
+         * other two catalogues hand over one fixed image, and {@code coverArtUrl} is what
+         * every client has always read -- this is additional, never a replacement.
+         */
+        String coverArtTemplate) {}
