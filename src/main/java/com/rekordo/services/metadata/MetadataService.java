@@ -476,18 +476,68 @@ public class MetadataService {
         if (ref.source() == ReleaseSource.MUSICBRAINZ) {
             return archiveCover(albumRef);
         }
-        if (ref.source() != ReleaseSource.DISCOGS) {
+        if (ref.source() != ReleaseSource.DISCOGS && ref.source() != ReleaseSource.APPLE_MUSIC) {
             return null;
         }
         // Asked once, remembered either way -- including the answer "there is none".
         if (group != null && group.getCoverFetchedAt() != null) {
             return group.getCoverArtUrl();
         }
-        if (budget[0] <= 0 || !discogsClient.servesImages()) {
+        if (budget[0] <= 0) {
+            return null;
+        }
+        if (ref.source() == ReleaseSource.APPLE_MUSIC) {
+            budget[0] -= 1;
+            return appleAlbumCover(ref, group);
+        }
+        if (!discogsClient.servesImages()) {
             return null;
         }
         budget[0] -= 1;
         return discogsAlbumCover(ref, group);
+    }
+
+    /**
+     * Fetches an Apple album's artwork and remembers it against the album.
+     *
+     * <p>An album picked from the Apple search is never mirrored, so without this every
+     * screen but the owner's own -- which kept the search result's artwork locally -- drew
+     * a wish for it with no sleeve: a friend's wishlist, the public page, the feed.
+     */
+    private String appleAlbumCover(ExternalRef ref, ReleaseGroupEntity group) {
+        AlbumDto album;
+        try {
+            album = appleMusicClient.album(ref.id()).map(AppleMusicMapper::toAlbumDto).orElse(null);
+        } catch (UpstreamUnavailableException e) {
+            // Not remembered, so the next request retries.
+            log.debug("Could not reach Apple Music for album {} ({})", ref, e.getMessage());
+            return null;
+        }
+
+        String cover = album == null ? null : album.coverArtUrl();
+
+        ReleaseGroupEntity entity = group == null ? adoptAppleAlbum(ref, album) : group;
+        if (entity == null) {
+            return cover;
+        }
+        entity.setCoverArtUrl(cover);
+        entity.setCoverFetchedAt(Instant.now());
+        releaseGroupRepository.save(entity);
+        return cover;
+    }
+
+    /** A row for an Apple album, so its sleeve has somewhere to live. Null without a title. */
+    private ReleaseGroupEntity adoptAppleAlbum(ExternalRef ref, AlbumDto album) {
+        if (album == null || album.title() == null || album.title().isBlank()) {
+            return null;
+        }
+        ReleaseGroupEntity entity = new ReleaseGroupEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setExternalId(ref.toString());
+        entity.setTitle(album.title());
+        entity.setArtistName(album.artistName() == null ? "" : album.artistName());
+        entity.setFetchedAt(Instant.now());
+        return entity;
     }
 
     /** Fetches a Discogs master's sleeve and remembers it against the album. */

@@ -1,6 +1,8 @@
 package com.rekordo.services.metadata;
 
 import com.rekordo.client.CoverArtClient;
+import com.rekordo.client.applemusic.AppleMusicClient;
+import com.rekordo.client.applemusic.AppleMusicResponses;
 import com.rekordo.client.discogs.DiscogsClient;
 import com.rekordo.client.discogs.DiscogsResponses;
 import com.rekordo.client.musicbrainz.MusicBrainzClient;
@@ -44,9 +46,11 @@ class AlbumCoversTest {
 
     private static final String MB_ALBUM = "musicbrainz:0f2d5a1e-4a1e-4e7a-9c1e-2f0d4b6a8c11";
     private static final String DISCOGS_ALBUM = "discogs:1283634";
+    private static final String APPLE_ALBUM = "applemusic:590434066";
 
     @Mock private MusicBrainzClient musicBrainzClient;
     @Mock private DiscogsClient discogsClient;
+    @Mock private AppleMusicClient appleMusicClient;
     @Mock private CoverArtClient coverArtClient;
     @Mock private ReleaseRepository releaseRepository;
     @Mock private ReleaseGroupRepository releaseGroupRepository;
@@ -262,5 +266,45 @@ class AlbumCoversTest {
         assertThat(service.albumCovers(List.of(DISCOGS_ALBUM)))
                 .containsExactly(new AlbumCoverDto(DISCOGS_ALBUM, null));
         verify(coverArtClient, never()).frontCoverUrlForGroup(any());
+    }
+
+    @Test
+    void asksAppleForAnAlbumPickedFromTheAppleSearch() {
+        // Reported from a friend's view of a wishlist: the owner saw the sleeve, because
+        // their device kept the search result's artwork, and everybody else saw none --
+        // an Apple album is never mirrored, so this endpoint had nothing to answer with.
+        mirror(List.of(), List.of());
+        when(appleMusicClient.album("590434066")).thenReturn(Optional.of(new AppleMusicResponses.Album(
+                "590434066",
+                new AppleMusicResponses.Attributes(
+                        "A Thousand Suns (Deluxe Edition)",
+                        "LINKIN PARK",
+                        new AppleMusicResponses.Artwork("https://is1.mzstatic.com/a/{w}x{h}bb.jpg", 3000, 3000, null, null),
+                        "2010-09-14",
+                        null,
+                        null,
+                        null,
+                        "https://music.apple.com/album/590434066"))));
+
+        assertThat(service.albumCovers(List.of(APPLE_ALBUM)))
+                .containsExactly(new AlbumCoverDto(APPLE_ALBUM, "https://is1.mzstatic.com/a/600x600bb.jpg"));
+
+        ArgumentCaptor<ReleaseGroupEntity> saved = ArgumentCaptor.forClass(ReleaseGroupEntity.class);
+        verify(releaseGroupRepository).save(saved.capture());
+        assertThat(saved.getValue().getExternalId()).isEqualTo(APPLE_ALBUM);
+        assertThat(saved.getValue().getCoverArtUrl()).isEqualTo("https://is1.mzstatic.com/a/600x600bb.jpg");
+        assertThat(saved.getValue().getCoverFetchedAt()).isNotNull();
+    }
+
+    @Test
+    void neverAsksAppleTwiceAboutTheSameAlbum() {
+        ReleaseGroupEntity album = group(APPLE_ALBUM);
+        album.setCoverArtUrl("https://is1.mzstatic.com/a/600x600bb.jpg");
+        album.setCoverFetchedAt(Instant.now());
+        mirror(List.of(album), List.of());
+
+        assertThat(service.albumCovers(List.of(APPLE_ALBUM)))
+                .containsExactly(new AlbumCoverDto(APPLE_ALBUM, "https://is1.mzstatic.com/a/600x600bb.jpg"));
+        verify(appleMusicClient, never()).album(any());
     }
 }
