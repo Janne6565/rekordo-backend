@@ -50,13 +50,7 @@ public class TracklistService {
         ExternalRef ref = ExternalRef.parse(releaseId);
         Optional<ReleaseEntity> mirrored = releaseRepository.findByExternalId(ref.toString());
 
-        if (ref.source() == ReleaseSource.DISCOGS) {
-            // Discogs search hands over a pressing but no track titles, and there is no
-            // lookup by id to go back for them. Permanent, and the count the mirror already
-            // holds is still worth stating.
-            return unavailable(releaseId, mirrored, TracklistUnavailableReason.DISCOGS);
-        }
-        if (!isCatalogued(releaseId) || !isMbid(ref.id())) {
+        if (!isCatalogued(releaseId)) {
             // A hand-entered `local:` copy, or an id from a client this build does not know.
             // Checked against the raw prefix and not the parsed one: ExternalRef treats an
             // unrecognised source as MusicBrainz, which makes `local:<uuid>` look exactly
@@ -64,7 +58,21 @@ public class TracklistService {
             // a paced request.
             return unavailable(releaseId, mirrored, TracklistUnavailableReason.NOT_IN_CATALOGUE);
         }
+        return switch (ref.source()) {
+            case MUSICBRAINZ -> fromMusicBrainz(releaseId, ref, mirrored);
+            // Discogs search hands over a pressing but no track titles, and there is no
+            // lookup by id to go back for them. Permanent, and the count the mirror already
+            // holds is still worth stating.
+            case DISCOGS -> unavailable(releaseId, mirrored, TracklistUnavailableReason.DISCOGS);
+            // Not read yet: Apple's catalogue does list an album's tracks.
+            case APPLE_MUSIC -> unavailable(releaseId, mirrored, TracklistUnavailableReason.NOT_IN_CATALOGUE);
+        };
+    }
 
+    private TracklistDto fromMusicBrainz(String releaseId, ExternalRef ref, Optional<ReleaseEntity> mirrored) {
+        if (!isMbid(ref.id())) {
+            return unavailable(releaseId, mirrored, TracklistUnavailableReason.NOT_IN_CATALOGUE);
+        }
         Optional<ReleaseEntity> resolved = mirrored.or(() -> metadataService.mirrorRow(ref));
         if (resolved.isEmpty()) {
             return unavailable(releaseId, Optional.empty(), TracklistUnavailableReason.NOT_IN_CATALOGUE);

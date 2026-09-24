@@ -330,26 +330,28 @@ public class MetadataService {
             }
         }
 
-        // An Apple album is never in the mirror -- the record search writes nothing down --
-        // so its artist and title are fetched back to cross the same bridge. One extra call,
-        // paid once per album and then cached, and only on the tap that asks for pressings.
-        if (ref.source() == ReleaseSource.APPLE_MUSIC) {
-            return appleMusicClient.album(ref.id())
-                    .map(AppleMusicResponses.Album::attributes)
-                    .map(attributes -> fromDiscogs(() -> discogsClient.pressingsOf(
-                            attributes.artistName(), attributes.name(), limit)))
-                    .orElseGet(List::of);
-        }
-
-        // Nothing on Discogs, or an album this server has never mirrored. Only a
-        // MusicBrainz album can be paged by its own id.
-        if (ref.source() != ReleaseSource.MUSICBRAINZ) {
-            return List.of();
-        }
-        return musicBrainzClient.findReleasesInGroup(ref.id(), limit).stream()
-                .map(this::upsert)
-                .flatMap(Optional::stream)
-                .toList();
+        // Nothing on Discogs, or an album this server has never mirrored.
+        return switch (ref.source()) {
+            // Only a MusicBrainz album can be paged by its own id.
+            case MUSICBRAINZ -> musicBrainzClient.findReleasesInGroup(ref.id(), limit).stream()
+                    .map(this::upsert)
+                    .flatMap(Optional::stream)
+                    .toList();
+            // Discogs pressings are only ever found by the artist-and-title bridge above;
+            // there is no second way in, so an album that crossed it empty has none.
+            case DISCOGS -> List.of();
+            // An Apple album is usually not in the mirror -- the record search writes nothing
+            // down -- so its artist and title are fetched back to cross the same bridge. One
+            // extra call, paid once per album and then cached, and only on the tap that asks
+            // for pressings. A mirrored one already crossed it with the same two fields.
+            case APPLE_MUSIC -> album.isPresent()
+                    ? List.of()
+                    : appleMusicClient.album(ref.id())
+                            .map(AppleMusicResponses.Album::attributes)
+                            .map(attributes -> fromDiscogs(() -> discogsClient.pressingsOf(
+                                    attributes.artistName(), attributes.name(), limit)))
+                            .orElseGet(List::of);
+        };
     }
 
     /** A hand-entered album ({@code local:<uuid>}) is in no catalogue and never will be. */
@@ -479,28 +481,30 @@ public class MetadataService {
      */
     private String albumOwnCover(String albumRef, ReleaseGroupEntity group, int[] budget) {
         ExternalRef ref = ExternalRef.parse(albumRef);
-        if (ref.source() == ReleaseSource.MUSICBRAINZ) {
-            return archiveCover(albumRef);
-        }
-        if (ref.source() != ReleaseSource.DISCOGS && ref.source() != ReleaseSource.APPLE_MUSIC) {
-            return null;
-        }
-        // Asked once, remembered either way -- including the answer "there is none".
-        if (group != null && group.getCoverFetchedAt() != null) {
-            return group.getCoverArtUrl();
-        }
-        if (budget[0] <= 0) {
-            return null;
-        }
-        if (ref.source() == ReleaseSource.APPLE_MUSIC) {
-            budget[0] -= 1;
-            return appleAlbumCover(ref, group);
-        }
-        if (!discogsClient.servesImages()) {
-            return null;
-        }
+        return switch (ref.source()) {
+            case MUSICBRAINZ -> archiveCover(ref);
+            // Asked once, remembered either way -- including the answer "there is none".
+            case DISCOGS -> remembersCover(group)
+                    ? group.getCoverArtUrl()
+                    // Without a token Discogs serves no images, so asking would spend
+                    // budget to learn nothing.
+                    : budget[0] > 0 && discogsClient.servesImages()
+                            ? spend(budget, () -> discogsAlbumCover(ref, group))
+                            : null;
+            case APPLE_MUSIC -> remembersCover(group)
+                    ? group.getCoverArtUrl()
+                    : budget[0] > 0 ? spend(budget, () -> appleAlbumCover(ref, group)) : null;
+        };
+    }
+
+    /** Whether the album was already asked for its own cover, whatever the answer was. */
+    private static boolean remembersCover(ReleaseGroupEntity group) {
+        return group != null && group.getCoverFetchedAt() != null;
+    }
+
+    private static String spend(int[] budget, java.util.function.Supplier<String> fetch) {
         budget[0] -= 1;
-        return discogsAlbumCover(ref, group);
+        return fetch.get();
     }
 
     /**
@@ -664,12 +668,11 @@ public class MetadataService {
         return mirrored == null ? null : mirrored.url();
     }
 
-    /** The Cover Art Archive's own answer for an album, which only MusicBrainz albums have. */
-    private String archiveCover(String albumRef) {
-        ExternalRef ref = ExternalRef.parse(albumRef);
-        if (ref.source() != ReleaseSource.MUSICBRAINZ) {
-            return null;
-        }
+    /**
+     * The Cover Art Archive's own answer for a MusicBrainz album. The archive is keyed by
+     * mbid, so no other catalogue's album has one -- callers only ask for MusicBrainz refs.
+     */
+    private String archiveCover(ExternalRef ref) {
         try {
             return coverArtClient.frontCoverUrlForGroup(UUID.fromString(ref.id()).toString());
         } catch (IllegalArgumentException e) {
@@ -693,9 +696,14 @@ public class MetadataService {
     Optional<ReleaseEntity> mirrorRow(ExternalRef ref) {
         return releaseRepository
                 .findByExternalId(ref.toString())
-                .or(() -> ref.source() == ReleaseSource.MUSICBRAINZ
-                        ? musicBrainzClient.lookupRelease(ref.id()).flatMap(this::persist)
-                        : Optional.empty());
+                .or(() -> switch (ref.source()) {
+                    case MUSICBRAINZ -> musicBrainzClient.lookupRelease(ref.id()).flatMap(this::persist);
+                    // Discogs rows arrive only through search; the app has no lookup by id.
+                    case DISCOGS -> Optional.<ReleaseEntity>empty();
+                    // Apple has no pressings. An Apple row exists only when a client handed
+                    // one over (adoptFromClient), and then it was found above.
+                    case APPLE_MUSIC -> Optional.<ReleaseEntity>empty();
+                });
     }
 
     /**
@@ -1066,9 +1074,13 @@ public class MetadataService {
      */
     private CoverProbe fetchCoverThumbnail(ReleaseEntity entity) {
         ExternalRef ref = ExternalRef.parse(entity.getExternalId());
-        if (ref.source() != ReleaseSource.MUSICBRAINZ) {
-            return discogsClient.fetchImage(entity.getCoverArtUrl());
-        }
+        return switch (ref.source()) {
+            case MUSICBRAINZ -> archiveThumbnail(entity, ref);
+            case DISCOGS, APPLE_MUSIC -> discogsClient.fetchImage(entity.getCoverArtUrl());
+        };
+    }
+
+    private CoverProbe archiveThumbnail(ReleaseEntity entity, ExternalRef ref) {
         Optional<ExternalRef> album = albumOf(entity);
         // A copy with no pressing chosen is mirrored under its album's own id (see
         // asUnpressedRelease), so its mbid is a release group's, and only the archive's
@@ -1103,7 +1115,12 @@ public class MetadataService {
         return probe;
     }
 
-    /** The album this row belongs to, when it is a MusicBrainz release group. */
+    /**
+     * The album this row belongs to, when it is a MusicBrainz release group.
+     *
+     * <p>A single-source filter on purpose: its only use is the Cover Art Archive, which
+     * knows nothing but MusicBrainz groups, so a Discogs or Apple album is "no album" here.
+     */
     private Optional<ExternalRef> albumOf(ReleaseEntity entity) {
         if (entity.getReleaseGroupId() == null) {
             return Optional.empty();
