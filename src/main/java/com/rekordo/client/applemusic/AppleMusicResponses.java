@@ -39,4 +39,36 @@ public final class AppleMusicResponses {
 
     public record Artwork(String url, Integer width, Integer height, String bgColor, String textColor1) {
     }
+
+    /**
+     * One album fetched by id, read for its tracks this time.
+     *
+     * <p>The same response {@link AlbumsResponse} reads: Apple includes the album's
+     * {@code tracks} relationship by default, so nothing extra is asked for.
+     */
+    public record AlbumWithTracksResponse(List<AlbumWithTracks> data) {
+    }
+
+    public record AlbumWithTracks(String id, Attributes attributes, Relationships relationships) {
+    }
+
+    public record Relationships(TrackData tracks) {
+    }
+
+    /** {@code next} is set past 300 tracks; no record anybody shelves gets there. */
+    public record TrackData(List<Track> data, String next) {
+    }
+
+    /** A song, or a music video on a deluxe edition -- both are on the album's list. */
+    public record Track(String id, String type, TrackAttributes attributes) {
+    }
+
+    public record TrackAttributes(
+            String name,
+            Integer trackNumber,
+            Integer discNumber,
+            Integer durationInMillis,
+            String artistName
+    ) {
+    }
 }

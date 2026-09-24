@@ -1,5 +1,7 @@
 package com.rekordo.services.metadata;
 
+import com.rekordo.client.applemusic.AppleMusicClient;
+import com.rekordo.client.applemusic.AppleMusicResponses;
 import com.rekordo.client.musicbrainz.MusicBrainzClient;
 import com.rekordo.client.musicbrainz.MusicBrainzResponses;
 import com.rekordo.entity.ReleaseEntity;
@@ -43,6 +45,7 @@ class TracklistServiceTest {
     private static final String RELEASE_ID = "musicbrainz:" + MBID;
 
     @Mock private MusicBrainzClient musicBrainzClient;
+    @Mock private AppleMusicClient appleMusicClient;
     @Mock private ReleaseRepository releaseRepository;
     @Mock private MetadataService metadataService;
     @Mock private ReleaseTrackRepository trackRepository;
@@ -53,7 +56,7 @@ class TracklistServiceTest {
     private TracklistService service() {
         if (service == null) {
             trackMirror = new TrackMirror(trackRepository, releaseRepository);
-            service = new TracklistService(musicBrainzClient, releaseRepository, metadataService, trackMirror);
+            service = new TracklistService(musicBrainzClient, appleMusicClient, releaseRepository, metadataService, trackMirror);
         }
         return service;
     }
@@ -241,5 +244,57 @@ class TracklistServiceTest {
             ReleaseTrackEntity stored = rows.iterator().next();
             return stored.getMediumTitle() == null;
         }));
+    }
+
+    private static AppleMusicResponses.Track appleTrack(int disc, int number, String title, String artist) {
+        return new AppleMusicResponses.Track(
+                String.valueOf(disc * 100 + number),
+                "songs",
+                new AppleMusicResponses.TrackAttributes(title, number, disc, 200_000, artist));
+    }
+
+    /**
+     * A copy picked from the Apple search names its album and no pressing, so its sheet asks
+     * for the album id -- and was answered NOT_IN_CATALOGUE, although Apple lists the tracks.
+     */
+    @Test
+    void readsAnAppleAlbumsTracksFromApple() {
+        when(releaseRepository.findByExternalId("applemusic:1440783617")).thenReturn(Optional.empty());
+        when(appleMusicClient.albumWithTracks("1440783617")).thenReturn(Optional.of(
+                new AppleMusicResponses.AlbumWithTracks(
+                        "1440783617",
+                        new AppleMusicResponses.Attributes("Nevermind", "Nirvana", null, "1991", null, null, 3, null),
+                        new AppleMusicResponses.Relationships(new AppleMusicResponses.TrackData(List.of(
+                                appleTrack(1, 1, "Smells Like Teen Spirit", "Nirvana"),
+                                appleTrack(1, 2, "In Bloom", "Nirvana"),
+                                appleTrack(2, 1, "Endless, Nameless", "Nirvana feat. Nobody")), null)))));
+
+        TracklistDto tracklist = service().tracklist("applemusic:1440783617");
+
+        assertThat(tracklist.unavailableReason()).isNull();
+        assertThat(tracklist.trackCount()).isEqualTo(3);
+        assertThat(tracklist.discCount()).isEqualTo(2);
+        assertThat(tracklist.media()).hasSize(2);
+        assertThat(tracklist.media().get(0).position()).isEqualTo(1);
+        assertThat(tracklist.media().get(0).tracks())
+                .extracting(track -> track.number() + " " + track.title())
+                .containsExactly("1 Smells Like Teen Spirit", "2 In Bloom");
+        // The album's own artist is not repeated on its rows; a different credit is kept.
+        assertThat(tracklist.media().get(0).tracks().get(0).artistName()).isNull();
+        assertThat(tracklist.media().get(1).tracks().get(0).artistName()).isEqualTo("Nirvana feat. Nobody");
+        verify(musicBrainzClient, never()).lookupRelease(any());
+        verify(metadataService, never()).mirrorRow(any());
+    }
+
+    @Test
+    void anAppleAlbumAppleDoesNotKnowHasNoTracklist() {
+        when(releaseRepository.findByExternalId("applemusic:404")).thenReturn(Optional.empty());
+        when(appleMusicClient.albumWithTracks("404")).thenReturn(Optional.empty());
+
+        TracklistDto tracklist = service().tracklist("applemusic:404");
+
+        assertThat(tracklist.unavailableReason()).isEqualTo(TracklistUnavailableReason.NOT_IN_CATALOGUE);
+        assertThat(tracklist.media()).isEmpty();
+        verify(musicBrainzClient, never()).lookupRelease(any());
     }
 }

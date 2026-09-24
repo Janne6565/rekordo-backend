@@ -66,6 +66,15 @@ public class CacheConfig {
      */
     public static final String ALBUM_SEARCH = "albumSearch";
 
+    /**
+     * An Apple album's tracklist.
+     *
+     * <p>Apple is not paced, but nothing about an Apple album is mirrored either, so this is
+     * the only thing standing between a tracklist sheet and a round trip on every open. A
+     * released album's tracks do not change; a week is only there to bound the memory.
+     */
+    public static final String APPLE_ALBUM_TRACKS = "appleAlbumTracks";
+
     @Bean
     public CacheManager cacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager();
@@ -79,6 +88,7 @@ public class CacheConfig {
         manager.registerCustomCache(BARCODE_LOOKUP, spec(10_000, Duration.ofHours(24)));
         manager.registerCustomCache(ARTIST_SEARCH, spec(2_000, Duration.ofHours(6)));
         manager.registerCustomCache(ALBUM_SEARCH, spec(2_000, Duration.ofHours(6)));
+        manager.registerCustomCache(APPLE_ALBUM_TRACKS, spec(2_000, Duration.ofDays(7)));
         return manager;
     }
 

@@ -183,6 +183,42 @@ class AppleMusicClientTest {
         server.verify();
     }
 
+    @Test
+    void readsAnAlbumsTracksOutOfTheSameLookup() {
+        // Apple includes the tracks relationship on an album by default; a disc number and a
+        // music video on a deluxe edition are both things a real response carries.
+        AppleMusicClient client = client();
+        server.expect(requestTo(Matchers.startsWith(BASE + "/v1/catalog/de/albums/1440783617")))
+                .andRespond(withSuccess("""
+                    {"data":[{"id":"1440783617","type":"albums","attributes":{
+                      "name":"Nevermind","artistName":"Nirvana","trackCount":2,
+                      "url":"https://music.apple.com/de/album/1440783617"},
+                     "relationships":{"tracks":{"href":"/v1/catalog/de/albums/1440783617/tracks","data":[
+                       {"id":"1","type":"songs","attributes":{"name":"Smells Like Teen Spirit",
+                         "trackNumber":1,"discNumber":1,"durationInMillis":301920,"artistName":"Nirvana"}},
+                       {"id":"2","type":"music-videos","attributes":{"name":"In Bloom",
+                         "trackNumber":1,"discNumber":2,"durationInMillis":255000,"artistName":"Nirvana"}}]}}}]}
+                    """, MediaType.APPLICATION_JSON));
+
+        var album = client.albumWithTracks("1440783617");
+
+        assertThat(album).isPresent();
+        var tracks = album.get().relationships().tracks().data();
+        assertThat(tracks).hasSize(2);
+        assertThat(tracks.get(0).attributes().name()).isEqualTo("Smells Like Teen Spirit");
+        assertThat(tracks.get(0).attributes().durationInMillis()).isEqualTo(301920);
+        assertThat(tracks.get(1).attributes().discNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void hasNoTracksForAnAlbumAppleDoesNotKnow() {
+        AppleMusicClient client = client();
+        server.expect(requestTo(Matchers.startsWith(BASE)))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(client.albumWithTracks("nope")).isEmpty();
+    }
+
     private static String oneAlbum() {
         return """
             {"results":{"albums":{"href":"/v1/catalog/de/search","data":[

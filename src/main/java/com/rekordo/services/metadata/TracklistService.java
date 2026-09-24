@@ -1,5 +1,6 @@
 package com.rekordo.services.metadata;
 
+import com.rekordo.client.applemusic.AppleMusicClient;
 import com.rekordo.client.musicbrainz.MusicBrainzClient;
 import com.rekordo.client.musicbrainz.MusicBrainzResponses;
 import com.rekordo.entity.ReleaseEntity;
@@ -28,6 +29,8 @@ import java.util.UUID;
  * MusicBrainz is paced at one request per second for the whole process, so a sheet that
  * re-asked on every open would queue behind every search in the app.
  *
+ * <p>An Apple album is the exception to the mirror: see {@link #fromAppleMusic}.
+ *
  * <p>An absent tracklist is a normal answer here, not an error. Two of them are permanent —
  * a Discogs pressing, which the app can count but never read titles from, and an id no
  * catalogue holds — and both come back as a {@link TracklistUnavailableReason} inside a 200
@@ -41,6 +44,7 @@ public class TracklistService {
     private static final Logger log = LoggerFactory.getLogger(TracklistService.class);
 
     private final MusicBrainzClient musicBrainzClient;
+    private final AppleMusicClient appleMusicClient;
     private final ReleaseRepository releaseRepository;
     private final MetadataService metadataService;
     private final TrackMirror trackMirror;
@@ -64,9 +68,28 @@ public class TracklistService {
             // lookup by id to go back for them. Permanent, and the count the mirror already
             // holds is still worth stating.
             case DISCOGS -> unavailable(releaseId, mirrored, TracklistUnavailableReason.DISCOGS);
-            // Not read yet: Apple's catalogue does list an album's tracks.
-            case APPLE_MUSIC -> unavailable(releaseId, mirrored, TracklistUnavailableReason.NOT_IN_CATALOGUE);
+            case APPLE_MUSIC -> fromAppleMusic(releaseId, ref, mirrored);
         };
+    }
+
+    /**
+     * An Apple album's tracks, straight from Apple.
+     *
+     * <p>Not through the mirror: an Apple id names an album, never a pressing, and the
+     * mirror's tracklist hangs off pressings. Apple is not paced and the client caches the
+     * answer, so the "ask once" rule above holds without a row to mark. A copy picked from
+     * the Apple search has no pressing, so its sheet asks with the album id, and this is
+     * the only place those titles can come from.
+     */
+    private TracklistDto fromAppleMusic(String releaseId, ExternalRef ref, Optional<ReleaseEntity> mirrored) {
+        List<TrackMediumDto> media = appleMusicClient.albumWithTracks(ref.id())
+                .map(AppleMusicMapper::toMedia)
+                .orElse(List.of());
+        if (media.isEmpty()) {
+            return unavailable(releaseId, mirrored, TracklistUnavailableReason.NOT_IN_CATALOGUE);
+        }
+        int counted = media.stream().mapToInt(medium -> medium.tracks().size()).sum();
+        return new TracklistDto(releaseId, counted, media.size(), media, null);
     }
 
     private TracklistDto fromMusicBrainz(String releaseId, ExternalRef ref, Optional<ReleaseEntity> mirrored) {

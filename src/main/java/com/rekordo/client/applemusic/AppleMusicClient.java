@@ -1,7 +1,9 @@
 package com.rekordo.client.applemusic;
 
 import com.rekordo.configuration.AppleMusicProperties;
+import com.rekordo.configuration.CacheConfig;
 import com.rekordo.model.exception.UpstreamUnavailableException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -93,6 +95,39 @@ public class AppleMusicClient {
                             .build(properties.storefront(), id))
                     .retrieve()
                     .body(AppleMusicResponses.AlbumsResponse.class);
+            return response == null || response.data() == null || response.data().isEmpty()
+                    ? Optional.empty()
+                    : Optional.ofNullable(response.data().getFirst());
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (RestClientException e) {
+            throw new UpstreamUnavailableException("Apple Music", e);
+        }
+    }
+
+    /**
+     * One album by its Apple id, with its tracklist.
+     *
+     * <p>Cached, and for longer than a search: a released album's tracks do not change, and
+     * this is the whole cost of a tracklist sheet for a record from the Apple search. Nothing
+     * is written to the mirror -- an Apple album is not a row this app keeps -- so the cache
+     * is the only copy between requests.
+     *
+     * <p>Empty for an id Apple does not have, or with no signing key; a failure to reach
+     * Apple throws and is not cached, so the sheet's retry asks again.
+     */
+    @Cacheable(cacheNames = CacheConfig.APPLE_ALBUM_TRACKS)
+    public Optional<AppleMusicResponses.AlbumWithTracks> albumWithTracks(String id) {
+        if (!properties.configured()) {
+            return Optional.empty();
+        }
+        try {
+            AppleMusicResponses.AlbumWithTracksResponse response = restClient
+                    .get()
+                    .uri(uri -> uri.path("/v1/catalog/{storefront}/albums/{id}")
+                            .build(properties.storefront(), id))
+                    .retrieve()
+                    .body(AppleMusicResponses.AlbumWithTracksResponse.class);
             return response == null || response.data() == null || response.data().isEmpty()
                     ? Optional.empty()
                     : Optional.ofNullable(response.data().getFirst());
