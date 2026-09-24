@@ -2,6 +2,7 @@ package com.rekordo.services.metadata;
 
 import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.CoverProbe;
+import com.rekordo.client.applemusic.AppleArtworkClient;
 import com.rekordo.client.applemusic.AppleMusicClient;
 import com.rekordo.client.applemusic.AppleMusicResponses;
 import com.rekordo.client.discogs.DiscogsClient;
@@ -69,6 +70,7 @@ public class MetadataService {
     private final MusicBrainzClient musicBrainzClient;
     private final DiscogsClient discogsClient;
     private final AppleMusicClient appleMusicClient;
+    private final AppleArtworkClient appleArtworkClient;
     private final CoverArtClient coverArtClient;
     private final DominantColorExtractor colorExtractor;
     private final ReleaseRepository releaseRepository;
@@ -1076,7 +1078,10 @@ public class MetadataService {
         ExternalRef ref = ExternalRef.parse(entity.getExternalId());
         return switch (ref.source()) {
             case MUSICBRAINZ -> archiveThumbnail(entity, ref);
-            case DISCOGS, APPLE_MUSIC -> discogsClient.fetchImage(entity.getCoverArtUrl());
+            case DISCOGS -> discogsClient.fetchImage(entity.getCoverArtUrl());
+            // An Apple row -- an album a phone handed over under its own id -- names Apple's
+            // CDN. It went through the Discogs client once, Discogs token and all.
+            case APPLE_MUSIC -> appleArtworkClient.fetch(entity.getCoverArtUrl());
         };
     }
 

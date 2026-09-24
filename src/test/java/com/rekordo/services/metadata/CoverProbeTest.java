@@ -2,6 +2,7 @@ package com.rekordo.services.metadata;
 
 import com.rekordo.client.CoverArtClient;
 import com.rekordo.client.CoverProbe;
+import com.rekordo.client.applemusic.AppleArtworkClient;
 import com.rekordo.client.discogs.DiscogsClient;
 import com.rekordo.client.musicbrainz.MusicBrainzClient;
 import com.rekordo.client.musicbrainz.MusicBrainzResponses;
@@ -53,6 +54,7 @@ class CoverProbeTest {
 
     @Mock private MusicBrainzClient musicBrainzClient;
     @Mock private DiscogsClient discogsClient;
+    @Mock private AppleArtworkClient appleArtworkClient;
     @Mock private CoverArtClient coverArtClient;
     @Mock private DominantColorExtractor colorExtractor;
     @Mock private ReleaseRepository releaseRepository;
@@ -245,5 +247,42 @@ class CoverProbeTest {
         assertThat(release.coverArtUrl()).isEqualTo(COVER_URL);
         assertThat(entity.getHasCoverArt()).isTrue();
         assertThat(entity.getDominantColor()).isEqualTo("#101010");
+    }
+
+    /**
+     * An album a phone handed over under its Apple id, with Apple's artwork as its cover.
+     * Sampling it went through the Discogs client, which sends the Discogs token with every
+     * request -- to Apple's CDN, or to wherever a client's row pointed.
+     */
+    @Test
+    void samplesAnAppleRowFromApplesCdnAndNeverThroughDiscogs() {
+        String appleRef = "applemusic:590434066";
+        String artwork = "https://is1-ssl.mzstatic.com/image/thumb/a/600x600bb.jpg";
+        ReleaseGroupEntity album = new ReleaseGroupEntity();
+        album.setId(UUID.randomUUID());
+        album.setExternalId(appleRef);
+        album.setTitle("A Thousand Suns");
+        album.setArtistName("Linkin Park");
+        album.setFetchedAt(Instant.now());
+        ReleaseEntity entity = new ReleaseEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setExternalId(appleRef);
+        entity.setReleaseGroupId(album.getId());
+        entity.setTitle("A Thousand Suns");
+        entity.setArtistName("Linkin Park");
+        entity.setFormat(Format.OTHER);
+        entity.setCoverArtUrl(artwork);
+        entity.setFetchedAt(Instant.now());
+        when(releaseRepository.findByExternalId(appleRef)).thenReturn(Optional.of(entity));
+        when(releaseGroupRepository.findById(album.getId())).thenReturn(Optional.of(album));
+        byte[] bytes = {4, 5, 6};
+        when(appleArtworkClient.fetch(artwork)).thenReturn(CoverProbe.found(bytes));
+        when(colorExtractor.extract(bytes)).thenReturn(Optional.of(new CoverPalette("#202020", "#c0392b", 0.3)));
+
+        ReleaseDto release = service.getRelease(appleRef);
+
+        assertThat(release.coverArtUrl()).isEqualTo(artwork);
+        assertThat(entity.getDominantColor()).isEqualTo("#202020");
+        verify(discogsClient, never()).fetchImage(any());
     }
 }

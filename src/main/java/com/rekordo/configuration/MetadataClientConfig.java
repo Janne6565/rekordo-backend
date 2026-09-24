@@ -103,6 +103,16 @@ public class MetadataClientConfig {
                 .build();
     }
 
+    /**
+     * Apple's artwork CDN, which wants no credential -- so none is attached. Kept apart from
+     * {@link #appleMusicRestClient} precisely so the developer token never leaves for a host
+     * that is not the API.
+     */
+    @Bean
+    public RestClient appleArtworkRestClient(ObservationRegistry observations) {
+        return observed(observations).build();
+    }
+
     @Bean
     public RestClient coverArtRestClient(ObservationRegistry observations, MusicBrainzProperties properties) {
         return observed(observations)

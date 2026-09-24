@@ -1,6 +1,7 @@
 package com.rekordo.client.discogs;
 
 import com.rekordo.client.CoverProbe;
+import com.rekordo.client.ImageHosts;
 import com.rekordo.client.UpstreamPacer;
 import com.rekordo.configuration.DiscogsProperties;
 import com.rekordo.model.exception.UpstreamUnavailableException;
@@ -25,6 +26,9 @@ import java.util.Optional;
 public class DiscogsClient {
 
     private static final Logger log = LoggerFactory.getLogger(DiscogsClient.class);
+
+    /** Discogs' image CDN: {@code i.discogs.com}, and {@code img.discogs.com} on older rows. */
+    static final String IMAGE_DOMAIN = "discogs.com";
 
     private final RestClient restClient;
     private final UpstreamPacer pacer;
@@ -196,6 +200,13 @@ public class DiscogsClient {
         if (!isUsable(url)) {
             // No address to ask: this pressing has no cover, and no amount of retrying finds one.
             return CoverProbe.absent();
+        }
+        if (!ImageHosts.isHttpsOn(url, IMAGE_DOMAIN)) {
+            // Every request from this client carries the Discogs token, and a row's cover
+            // address can come from a client (adoptFromClient). Refused without asking, and
+            // reported as unreachable: nothing was learnt, so nothing is written down.
+            log.debug("Not fetching an image outside Discogs with the Discogs client: {}", url);
+            return CoverProbe.unreachable();
         }
         try {
             byte[] bytes = restClient
