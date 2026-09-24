@@ -2,12 +2,14 @@ package com.rekordo.services.social;
 
 import com.rekordo.entity.ActivityEventEntity;
 import com.rekordo.entity.ReleaseEntity;
+import com.rekordo.entity.ReleaseGroupEntity;
 import com.rekordo.entity.UserEntity;
 import com.rekordo.model.core.ActivityActorDto;
 import com.rekordo.model.core.ActivityEntryDto;
 import com.rekordo.model.core.ActivityFeedDto;
 import com.rekordo.model.core.ActivityType;
 import com.rekordo.model.core.CopyOrigin;
+import com.rekordo.model.core.ExternalRef;
 import com.rekordo.model.core.Format;
 import com.rekordo.repository.ActivityEventRepository;
 import com.rekordo.repository.CopyRepository;
@@ -206,6 +208,17 @@ public class ActivityService {
             if (release != null) {
                 title = release.getTitle();
                 artist = isBlank(artist) ? release.getArtistName() : artist;
+            } else {
+                // A copy with no pressing chosen names its album here, and an album is a
+                // group row, not a release. Without this the line was stored with no title,
+                // which the clients draw as a sentence about nothing.
+                ReleaseGroupEntity album = releaseGroupRepository
+                        .findByExternalId(ExternalRef.parse(releaseId).toString())
+                        .orElse(null);
+                if (album != null) {
+                    title = album.getTitle();
+                    artist = isBlank(artist) ? album.getArtistName() : artist;
+                }
             }
         }
         ActivityEventEntity event = new ActivityEventEntity();
@@ -265,7 +278,7 @@ public class ActivityService {
         Map<UUID, UserEntity> actors = actorsOf(readable);
         Map<String, ReleaseEntity> releases = releasesOf(readable);
         return new ActivityFeedDto(
-                collapse(viewerId, readable, actors, releases, albumCoversOf(readable)));
+                collapse(viewerId, readable, actors, releases, albumCoversOf(readable, releases)));
     }
 
     /**
@@ -294,7 +307,7 @@ public class ActivityService {
 
         Map<UUID, UserEntity> actors = actorsOf(events);
         Map<String, ReleaseEntity> releases = releasesOf(events);
-        return collapse(viewerId, events, actors, releases, albumCoversOf(events));
+        return collapse(viewerId, events, actors, releases, albumCoversOf(events, releases));
     }
 
     private boolean mayRead(UUID viewerId, ActivityEventEntity event) {
@@ -426,11 +439,19 @@ public class ActivityService {
      */
     private String coverOf(
             ActivityEventEntity event, Map<String, ReleaseEntity> releases, Map<String, String> albumCovers) {
-        if (event.getType() == ActivityType.WISH_ADDED) {
-            return event.getReleaseId() == null ? null : albumCovers.get(event.getReleaseId());
+        if (event.getReleaseId() == null) {
+            return null;
         }
-        ReleaseEntity release = event.getReleaseId() == null ? null : releases.get(event.getReleaseId());
-        if (release == null || Boolean.FALSE.equals(release.getHasCoverArt())) {
+        if (event.getType() == ActivityType.WISH_ADDED) {
+            return albumCovers.get(event.getReleaseId());
+        }
+        ReleaseEntity release = releases.get(event.getReleaseId());
+        if (release == null) {
+            // A copy with no pressing chosen stores its album's id, which the release mirror
+            // does not hold -- so it is drawn the way a wish for that album is.
+            return albumCovers.get(event.getReleaseId());
+        }
+        if (Boolean.FALSE.equals(release.getHasCoverArt())) {
             return null;
         }
         return release.getCoverArtUrl();
@@ -467,12 +488,35 @@ public class ActivityService {
      * catalogue calls with somebody waiting. What the mirror holds is answered at once and
      * the rest heal when a wishlist screen asks for them properly.
      */
-    private Map<String, String> albumCoversOf(List<ActivityEventEntity> events) {
+    private Map<String, String> albumCoversOf(
+            List<ActivityEventEntity> events, Map<String, ReleaseEntity> releases) {
         Set<String> ids = new HashSet<>();
+        Set<String> unmirroredCopies = new HashSet<>();
         for (ActivityEventEntity event : events) {
-            if (event.getType() == ActivityType.WISH_ADDED && event.getReleaseId() != null) {
-                ids.add(event.getReleaseId());
+            String id = event.getReleaseId();
+            if (id == null || id.startsWith("local:")) {
+                continue;
             }
+            switch (event.getType()) {
+                case WISH_ADDED -> ids.add(id);
+                // A copy line names an album when no pressing was chosen, which shows as an
+                // id the release mirror does not hold.
+                case COPY_ADDED, WISH_FULFILLED -> {
+                    if (!releases.containsKey(id)) {
+                        unmirroredCopies.add(id);
+                    }
+                }
+                case FRIENDSHIP_ACCEPTED -> { }
+            }
+        }
+        if (!unmirroredCopies.isEmpty()) {
+            // Only where that id really is an album. A pressing the mirror has not cached
+            // would otherwise be read as an album id, and a MusicBrainz release mbid turned
+            // into a release-group address that does not exist.
+            Set<String> albums = new HashSet<>();
+            releaseGroupRepository.findAllByExternalIdIn(unmirroredCopies)
+                    .forEach(group -> albums.add(group.getExternalId()));
+            unmirroredCopies.stream().filter(albums::contains).forEach(ids::add);
         }
         return ids.isEmpty() ? Map.of() : metadataService.mirroredAlbumCovers(ids);
     }

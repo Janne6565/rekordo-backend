@@ -321,6 +321,69 @@ class ActivityServiceTest {
         assertThat(saved().getWantedFormat()).isEqualTo("VINYL");
     }
 
+    private static com.rekordo.entity.ReleaseGroupEntity album(String externalId, String title, String artist) {
+        com.rekordo.entity.ReleaseGroupEntity group = new com.rekordo.entity.ReleaseGroupEntity();
+        group.setId(UUID.randomUUID());
+        group.setExternalId(externalId);
+        group.setTitle(title);
+        group.setArtistName(artist);
+        group.setFetchedAt(Instant.now());
+        return group;
+    }
+
+    @Test
+    void namesACopyWithNoPressingAfterItsAlbum() {
+        // A copy picked from the album search has an album and no pressing, and its title
+        // lives on the album. Looking only in the release mirror stored the line untitled,
+        // which the clients draw as "added ." with no sleeve.
+        when(releaseRepository.findByExternalId("applemusic:590434066")).thenReturn(Optional.empty());
+        when(releaseGroupRepository.findByExternalId("applemusic:590434066"))
+                .thenReturn(Optional.of(album("applemusic:590434066", "A Thousand Suns", "Linkin Park")));
+
+        service.recordCopyAdded(
+                FRIEND, UUID.randomUUID(), CopyOrigin.MANUAL, null, "applemusic:590434066", null, null, 1L);
+
+        assertThat(saved()).satisfies(event -> {
+            assertThat(event.getReleaseId()).isEqualTo("applemusic:590434066");
+            assertThat(event.getTitle()).isEqualTo("A Thousand Suns");
+            assertThat(event.getArtistName()).isEqualTo("Linkin Park");
+        });
+    }
+
+    @Test
+    void drawsACopyWithNoPressingWithItsAlbumsCover() {
+        // The line stores the album id, which the release mirror never holds, so the tile
+        // was blank for every record added without choosing a pressing.
+        ActivityEventEntity copy = event(ActivityType.COPY_ADDED, "A Thousand Suns", Instant.now());
+        copy.setReleaseId("applemusic:590434066");
+        when(activityRepository.feedFor(any(), any())).thenReturn(List.of(copy));
+        when(releaseRepository.findAllByExternalIdIn(any())).thenReturn(List.of());
+        when(releaseGroupRepository.findAllByExternalIdIn(any()))
+                .thenReturn(List.of(album("applemusic:590434066", "A Thousand Suns", "Linkin Park")));
+        when(metadataService.mirroredAlbumCovers(any()))
+                .thenReturn(Map.of("applemusic:590434066", "https://is1.mzstatic.com/a/600x600bb.jpg"));
+
+        ActivityEntryDto entry = service.feed(VIEWER, List.of(FRIEND)).entries().getFirst();
+
+        assertThat(entry.coverArtUrl()).isEqualTo("https://is1.mzstatic.com/a/600x600bb.jpg");
+    }
+
+    @Test
+    void doesNotMistakeAnUnmirroredPressingForAnAlbum() {
+        // A pressing the mirror has not cached is not an album; asking for an album cover
+        // under its id would build an archive address that does not exist.
+        ActivityEventEntity copy = event(ActivityType.COPY_ADDED, "Aja", Instant.now());
+        copy.setReleaseId("musicbrainz:0f2d5a1e-4a1e-4e7a-9c1e-2f0d4b6a8c11");
+        when(activityRepository.feedFor(any(), any())).thenReturn(List.of(copy));
+        when(releaseRepository.findAllByExternalIdIn(any())).thenReturn(List.of());
+        when(releaseGroupRepository.findAllByExternalIdIn(any())).thenReturn(List.of());
+
+        ActivityEntryDto entry = service.feed(VIEWER, List.of(FRIEND)).entries().getFirst();
+
+        assertThat(entry.coverArtUrl()).isNull();
+        verify(metadataService, never()).mirroredAlbumCovers(any());
+    }
+
     private ActivityEventEntity saved() {
         ArgumentCaptor<ActivityEventEntity> captor = ArgumentCaptor.forClass(ActivityEventEntity.class);
         verify(activityRepository).save(captor.capture());
