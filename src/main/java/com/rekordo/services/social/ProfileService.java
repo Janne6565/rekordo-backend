@@ -24,6 +24,7 @@ import com.rekordo.repository.ReleaseRepository;
 import com.rekordo.repository.UserRepository;
 import com.rekordo.repository.WishlistItemRepository;
 import com.rekordo.services.metadata.MetadataMapper;
+import com.rekordo.services.metadata.MetadataService;
 import com.rekordo.services.storage.AvatarService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -66,6 +67,7 @@ public class ProfileService {
     private final WishlistItemRepository wishlistItemRepository;
     private final PhotoRepository photoRepository;
     private final ReleaseRepository releaseRepository;
+    private final MetadataService metadataService;
     private final FriendshipService friendshipService;
     private final VisibilityService visibilityService;
 
@@ -230,6 +232,19 @@ public class ProfileService {
             for (ReleaseEntity release : releaseRepository.findAllByExternalIdIn(ids)) {
                 byId.put(release.getExternalId(), MetadataMapper.toDto(release, null));
             }
+        }
+        // A copy with no pressing chosen names its album, which is a group row and not a
+        // release. Only the device that made the copy may have handed the album over as a
+        // release row; without this every other one showed on a friend's shelf as
+        // "Untitled" by "Unknown artist" with no sleeve.
+        List<String> albums = copies.stream()
+                .filter(copy -> copy.getReleaseId() == null)
+                .map(CopyEntity::getAlbumId)
+                .filter(id -> id != null && !id.startsWith("local:") && !byId.containsKey(id))
+                .distinct()
+                .toList();
+        if (!albums.isEmpty()) {
+            byId.putAll(metadataService.describeAlbums(albums));
         }
         return byId;
     }

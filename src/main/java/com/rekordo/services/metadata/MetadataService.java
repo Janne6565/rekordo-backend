@@ -881,6 +881,49 @@ public class MetadataService {
     }
 
     /**
+     * Albums described as the release a copy of them would have had, with the album's cover.
+     *
+     * <p>For a reader that holds copies with no pressing chosen and has to draw them now --
+     * a friend's shelf -- rather than a device that will ask {@code /albums/covers} for the
+     * picture itself, which is why {@link #getReleases} leaves the cover out and this does
+     * not. Mirror only, like {@link #mirroredAlbumCovers}, whose rule picks the cover.
+     *
+     * @return asked-for id to its description; an album the mirror has no row for is absent
+     */
+    @Transactional(readOnly = true)
+    public Map<String, ReleaseDto> describeAlbums(Collection<String> albumIds) {
+        Map<String, String> wanted = new LinkedHashMap<>();
+        for (String albumId : albumIds) {
+            if (albumId == null || albumId.isBlank() || albumId.startsWith(MANUAL_PREFIX)) {
+                continue;
+            }
+            wanted.putIfAbsent(albumId, ExternalRef.parse(albumId).toString());
+        }
+        if (wanted.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, ReleaseGroupEntity> groups = new HashMap<>();
+        for (ReleaseGroupEntity group : releaseGroupRepository.findAllByExternalIdIn(wanted.values())) {
+            groups.put(group.getExternalId(), group);
+        }
+        Map<String, String> covers = resolveAlbumCovers(wanted.keySet(), 0);
+
+        Map<String, ReleaseDto> described = new HashMap<>();
+        wanted.forEach((asked, ref) -> {
+            ReleaseGroupEntity group = groups.get(ref);
+            if (group != null) {
+                ReleaseDto album = asUnpressedRelease(group);
+                described.put(asked, new ReleaseDto(
+                        album.id(), album.albumId(), album.title(), album.artistName(), album.year(),
+                        album.format(), album.label(), album.catalogNumber(), album.country(),
+                        album.barcode(), album.releaseDate(), album.trackCount(), album.discCount(),
+                        covers.get(asked), album.coverTheme()));
+            }
+        });
+        return described;
+    }
+
+    /**
      * An album, shaped as the release a copy of it would have had.
      *
      * <p>Everything a pressing knows and an album does not -- format, label, catalogue

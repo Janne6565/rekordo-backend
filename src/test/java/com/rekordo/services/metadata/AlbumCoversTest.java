@@ -377,4 +377,29 @@ class AlbumCoversTest {
         verifyNoInteractions(appleMusicClient, musicBrainzClient);
         verify(discogsClient, never()).master(org.mockito.ArgumentMatchers.anyLong());
     }
+
+    @Test
+    void describesAnAlbumForAFriendsShelfWithTheSameCoverTheFeedDraws() {
+        ReleaseGroupEntity apple = group(APPLE_ALBUM);
+        apple.setFirstReleaseYear(2010);
+        apple.setCoverArtUrl("https://is1.mzstatic.com/a/600x600bb.jpg");
+        apple.setCoverFetchedAt(Instant.now());
+        mirror(List.of(apple), List.of());
+
+        Map<String, com.rekordo.model.core.ReleaseDto> described =
+                service.describeAlbums(List.of(APPLE_ALBUM, DISCOGS_ALBUM, "local:x"));
+
+        // An album the mirror has no row for is absent rather than invented.
+        assertThat(described).containsOnlyKeys(APPLE_ALBUM);
+        assertThat(described.get(APPLE_ALBUM)).satisfies(album -> {
+            assertThat(album.id()).isEqualTo(APPLE_ALBUM);
+            assertThat(album.albumId()).isEqualTo(APPLE_ALBUM);
+            assertThat(album.title()).isEqualTo("One More Light Live");
+            assertThat(album.year()).isEqualTo(2010);
+            assertThat(album.format()).isEqualTo(Format.OTHER);
+            assertThat(album.coverArtUrl()).isEqualTo("https://is1.mzstatic.com/a/600x600bb.jpg");
+        });
+        verifyNoInteractions(appleMusicClient, discogsClient, musicBrainzClient);
+        verify(releaseGroupRepository, never()).save(any());
+    }
 }
