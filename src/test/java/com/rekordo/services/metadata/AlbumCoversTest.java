@@ -25,6 +25,7 @@ import org.mockito.quality.Strictness;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -321,5 +323,58 @@ class AlbumCoversTest {
         assertThat(service.mirroredAlbumCovers(List.of(APPLE_ALBUM)))
                 .containsEntry(APPLE_ALBUM, "https://is1.mzstatic.com/a/600x600bb.jpg");
         verify(appleMusicClient, never()).album(any());
+    }
+
+    @Test
+    void theFeedsReadNeverGoesUpstreamAndNeverWrites() {
+        // mirroredAlbumCovers runs inside the feed's read-only transaction. Albums nobody
+        // has asked about yet -- one per catalogue -- are exactly the ones albumCovers
+        // would fetch and remember, so they are the ones that prove this path does neither.
+        mirror(List.of(), List.of());
+        when(discogsClient.servesImages()).thenReturn(true);
+        when(coverArtClient.frontCoverUrlForGroup(any()))
+                .thenAnswer(call -> "https://coverartarchive.org/release-group/" + call.getArgument(0) + "/front-500");
+
+        Map<String, String> covers = service.mirroredAlbumCovers(List.of(MB_ALBUM, DISCOGS_ALBUM, APPLE_ALBUM));
+
+        // The archive address is built, not fetched, so the MusicBrainz album still answers.
+        assertThat(covers).containsOnlyKeys(MB_ALBUM);
+        verifyNoInteractions(appleMusicClient, discogsClient, musicBrainzClient);
+        verify(releaseGroupRepository, never()).save(any());
+        verify(releaseRepository, never()).save(any());
+    }
+
+    @Test
+    void theFeedAndTheCoversEndpointAgreeWheneverNothingNeedsFetching() {
+        // The contract that keeps the two entry points from drifting again: for one and
+        // the same mirror, the read-only answer is the full answer whenever the full one
+        // would not have had to go upstream.
+        ReleaseGroupEntity mb = group(MB_ALBUM);
+        ReleaseGroupEntity discogs = group(DISCOGS_ALBUM);
+        discogs.setCoverArtUrl("https://img.discogs/master.jpg");
+        discogs.setCoverFetchedAt(Instant.now());
+        ReleaseGroupEntity apple = group(APPLE_ALBUM);
+        apple.setCoverArtUrl("https://is1.mzstatic.com/a/600x600bb.jpg");
+        apple.setCoverFetchedAt(Instant.now());
+        mirror(
+                List.of(mb, discogs, apple),
+                List.of(release(mb, "musicbrainz:80032220", "https://coverartarchive.org/release/80032220/front-500", null)));
+        when(discogsClient.servesImages()).thenReturn(true);
+        when(coverArtClient.frontCoverUrlForGroup(any()))
+                .thenAnswer(call -> "https://coverartarchive.org/release-group/" + call.getArgument(0) + "/front-500");
+        List<String> asked = List.of(MB_ALBUM, DISCOGS_ALBUM, APPLE_ALBUM);
+
+        Map<String, String> full = new java.util.LinkedHashMap<>();
+        service.albumCovers(asked).forEach(cover -> full.put(cover.albumId(), cover.coverArtUrl()));
+        Map<String, String> readOnly = service.mirroredAlbumCovers(asked);
+
+        assertThat(readOnly).isEqualTo(full);
+        assertThat(full).containsEntry(
+                        MB_ALBUM,
+                        "https://coverartarchive.org/release-group/0f2d5a1e-4a1e-4e7a-9c1e-2f0d4b6a8c11/front-500")
+                .containsEntry(DISCOGS_ALBUM, "https://img.discogs/master.jpg")
+                .containsEntry(APPLE_ALBUM, "https://is1.mzstatic.com/a/600x600bb.jpg");
+        verifyNoInteractions(appleMusicClient, musicBrainzClient);
+        verify(discogsClient, never()).master(org.mockito.ArgumentMatchers.anyLong());
     }
 }

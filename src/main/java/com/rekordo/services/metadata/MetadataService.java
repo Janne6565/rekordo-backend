@@ -375,38 +375,12 @@ public class MetadataService {
      */
     @Transactional
     public List<AlbumCoverDto> albumCovers(Collection<String> albumIds) {
-        // Asked-for id -> the normalised reference it is stored under. Ordered, because the
-        // response mirrors the request, and de-duplicated: a client may ask twice.
-        Map<String, String> wanted = new LinkedHashMap<>();
-        for (String albumId : albumIds) {
-            if (albumId == null || albumId.isBlank() || albumId.startsWith(MANUAL_PREFIX)) {
-                continue;
-            }
-            wanted.putIfAbsent(albumId, ExternalRef.parse(albumId).toString());
-        }
-
-        Map<String, ReleaseGroupEntity> groups = new HashMap<>();
-        for (ReleaseGroupEntity group : releaseGroupRepository.findAllByExternalIdIn(wanted.values())) {
-            groups.put(group.getExternalId(), group);
-        }
-        Map<UUID, MirroredCover> mirrored = mirroredCovers(groups.values());
-
         // Bounded per request: a page of a hundred unknown albums must not become a hundred
         // paced upstream calls with somebody waiting on the response. The rest come back
         // null and are resolved by the next request, which is what the endpoint did for
         // every album before any of them could be resolved at all.
-        int[] budget = {UPSTREAM_ALBUM_COVERS_PER_REQUEST};
-        return wanted.entrySet().stream()
-                .map(entry -> {
-                    ReleaseGroupEntity group = groups.get(entry.getValue());
-                    MirroredCover cover = group == null ? null : mirrored.get(group.getId());
-                    // The album's own cover is asked for even when a pressing offered one,
-                    // unless that pressing's art is confirmed -- see preferredCover.
-                    String albumOwn = cover != null && cover.confirmed()
-                            ? null
-                            : albumOwnCover(entry.getValue(), group, budget);
-                    return new AlbumCoverDto(entry.getKey(), preferredCover(cover, albumOwn));
-                })
+        return resolveAlbumCovers(albumIds, UPSTREAM_ALBUM_COVERS_PER_REQUEST).entrySet().stream()
+                .map(entry -> new AlbumCoverDto(entry.getKey(), entry.getValue()))
                 .toList();
     }
 
@@ -415,16 +389,47 @@ public class MetadataService {
      *
      * <p>The sibling of {@link #albumCovers}, for callers inside a read-only transaction —
      * the Friends feed, which has to draw a page of wish lines without blocking on a
-     * catalogue paced at tens of requests a minute. The mirror first, then the Cover Art
-     * Archive's address for a MusicBrainz album, which is built from the group id and so
-     * costs nothing and cannot fail. A Discogs album the mirror has never seen answers
-     * null and heals the next time a client asks {@code /albums/covers} for it, which the
-     * wishlist screens already do.
+     * catalogue paced at tens of requests a minute. It is the same rule with an upstream
+     * budget of zero, so for any album that needs no fetch the two answer identically: a
+     * cover the album already remembers on its group row, the mirror's pressings, the
+     * Cover Art Archive's address for a MusicBrainz album. An album nobody has asked about
+     * yet answers nothing here and heals the next time a client asks {@code /albums/covers}
+     * for it, which the wishlist screens already do.
      *
      * @return asked-for id to cover URL, with no entry where nothing known has one
      */
     @Transactional(readOnly = true)
     public Map<String, String> mirroredAlbumCovers(Collection<String> albumIds) {
+        Map<String, String> covers = new HashMap<>();
+        resolveAlbumCovers(albumIds, 0).forEach((asked, cover) -> {
+            if (cover != null) {
+                covers.put(asked, cover);
+            }
+        });
+        return covers;
+    }
+
+    /**
+     * The one rule for which picture stands for an album; both public entry points above
+     * are this with a different upstream budget.
+     *
+     * <p>Precedence, per album: a mirrored pressing whose art is confirmed; then the
+     * album's own cover ({@link #albumOwnCover} -- remembered on the group row, the
+     * archive's address, or an upstream fetch while budget lasts); then an unprobed
+     * mirrored pressing; never one known to have none. See {@link #preferredCover}.
+     *
+     * <p>They were two copies of this once, and drifted: the read-only one never looked at
+     * the cover remembered on the group row, so the Friends feed drew blank tiles for the
+     * Discogs and Apple albums {@code /albums/covers} had already answered.
+     *
+     * @param upstreamBudget how many albums may be fetched from a catalogue; 0 means nothing
+     *                       leaves the process and nothing is written
+     * @return asked-for id to cover (null where there is none), in request order and
+     *         de-duplicated, with hand-entered and blank ids left out
+     */
+    private Map<String, String> resolveAlbumCovers(Collection<String> albumIds, int upstreamBudget) {
+        // Asked-for id -> the normalised reference it is stored under. Ordered, because the
+        // response mirrors the request, and de-duplicated: a client may ask twice.
         Map<String, String> wanted = new LinkedHashMap<>();
         for (String albumId : albumIds) {
             if (albumId == null || albumId.isBlank() || albumId.startsWith(MANUAL_PREFIX)) {
@@ -442,20 +447,15 @@ public class MetadataService {
         }
         Map<UUID, MirroredCover> mirrored = mirroredCovers(groups.values());
 
-        Map<String, String> covers = new HashMap<>();
+        int[] budget = {upstreamBudget};
+        Map<String, String> covers = new LinkedHashMap<>();
         wanted.forEach((asked, ref) -> {
             ReleaseGroupEntity group = groups.get(ref);
             MirroredCover cover = group == null ? null : mirrored.get(group.getId());
-            // The album's own sleeve, when one was already fetched: an Apple or Discogs album
-            // remembers it on its group row, and without this a wish line in the feed drew a
-            // blank tile for exactly the albums /albums/covers had already answered.
-            String albumOwn = group != null && group.getCoverFetchedAt() != null
-                    ? group.getCoverArtUrl()
-                    : archiveCover(ref);
-            String answer = preferredCover(cover, albumOwn);
-            if (answer != null) {
-                covers.put(asked, answer);
-            }
+            // The album's own cover is not even asked for when a pressing's art is
+            // confirmed: it could not win, and asking may spend the upstream budget.
+            String albumOwn = cover != null && cover.confirmed() ? null : albumOwnCover(ref, group, budget);
+            covers.put(asked, preferredCover(cover, albumOwn));
         });
         return covers;
     }
