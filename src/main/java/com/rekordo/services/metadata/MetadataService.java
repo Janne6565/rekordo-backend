@@ -446,7 +446,13 @@ public class MetadataService {
         wanted.forEach((asked, ref) -> {
             ReleaseGroupEntity group = groups.get(ref);
             MirroredCover cover = group == null ? null : mirrored.get(group.getId());
-            String answer = preferredCover(cover, archiveCover(ref));
+            // The album's own sleeve, when one was already fetched: an Apple or Discogs album
+            // remembers it on its group row, and without this a wish line in the feed drew a
+            // blank tile for exactly the albums /albums/covers had already answered.
+            String albumOwn = group != null && group.getCoverFetchedAt() != null
+                    ? group.getCoverArtUrl()
+                    : archiveCover(ref);
+            String answer = preferredCover(cover, albumOwn);
             if (answer != null) {
                 covers.put(asked, answer);
             }

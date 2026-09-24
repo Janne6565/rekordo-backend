@@ -307,4 +307,19 @@ class AlbumCoversTest {
                 .containsExactly(new AlbumCoverDto(APPLE_ALBUM, "https://is1.mzstatic.com/a/600x600bb.jpg"));
         verify(appleMusicClient, never()).album(any());
     }
+
+    @Test
+    void theFeedReadsTheCoverAnAlbumAlreadyRemembers() {
+        // Reported from the Friends feed: /albums/covers had fetched and stored the sleeve of
+        // an Apple album, and the feed's mirror-only read still drew a blank tile, because it
+        // looked at mirrored pressings and the archive and never at the album's own row.
+        ReleaseGroupEntity album = group(APPLE_ALBUM);
+        album.setCoverArtUrl("https://is1.mzstatic.com/a/600x600bb.jpg");
+        album.setCoverFetchedAt(Instant.now());
+        mirror(List.of(album), List.of());
+
+        assertThat(service.mirroredAlbumCovers(List.of(APPLE_ALBUM)))
+                .containsEntry(APPLE_ALBUM, "https://is1.mzstatic.com/a/600x600bb.jpg");
+        verify(appleMusicClient, never()).album(any());
+    }
 }
