@@ -18,6 +18,29 @@ public interface PhotoRepository extends JpaRepository<PhotoEntity, UUID> {
 
     List<PhotoEntity> findAllByUserId(UUID userId);
 
+    /**
+     * Live photos whose copy or wish was removed before {@code removedBefore}, a batch at a time.
+     *
+     * <p>Removing a record has only ever tombstoned the record, so its photos stayed live --
+     * counted by {@link #sumLiveBytes} and kept in the bucket with nothing able to reach them.
+     * The clients now put them down themselves; this is what finds the ones a client never
+     * will, because it is an old version or never opens again. The owner has to be the same
+     * account's: photos carry no foreign key to their owner, and an id alone is not proof.
+     */
+    @Query(value = """
+            SELECT p.* FROM photos p
+            WHERE p.deleted_at IS NULL
+              AND (EXISTS (SELECT 1 FROM copies c
+                           WHERE c.id = p.copy_id AND c.user_id = p.user_id
+                             AND c.deleted_at IS NOT NULL AND c.deleted_at < :removedBefore)
+                OR EXISTS (SELECT 1 FROM wishlist_items w
+                           WHERE w.id = p.wish_id AND w.user_id = p.user_id
+                             AND w.deleted_at IS NOT NULL AND w.deleted_at < :removedBefore))
+            ORDER BY p.id
+            LIMIT :batch
+            """, nativeQuery = true)
+    List<PhotoEntity> findOrphaned(@Param("removedBefore") long removedBefore, @Param("batch") int batch);
+
     /** Scoped by user so one account can never read another's photo by guessing an id. */
     Optional<PhotoEntity> findByIdAndUserId(UUID id, UUID userId);
 
